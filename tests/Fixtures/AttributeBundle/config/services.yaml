@@ -1,0 +1,23 @@
+parameters:
+    kernel_fixture.parameter_message: 'attribute-driven'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\:
+        resource: '../src/'
+
+    SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Service\FeatureReport:
+        public: true
+
+    'SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Contract\FormatterInterface $adminFormatter':
+        alias: SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Formatter\HtmlFormatter
+
+    'SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Contract\FormatterInterface $reportFormatter':
+        alias: SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Formatter\JsonFormatter
+
+    SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Contract\LazyProbeInterface:
+        alias: SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Service\LazyProbe
