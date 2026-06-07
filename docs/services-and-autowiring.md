@@ -1,8 +1,8 @@
-# Services And Autowiring
+# Services and Autowiring
 
-## Empfohlenes `services.yaml`
+## Recommended `services.yaml`
 
-Die empfohlene Struktur orientiert sich am Symfony-Skeleton:
+The recommended structure follows the Symfony skeleton:
 
 ```yaml
 services:
@@ -17,18 +17,18 @@ services:
             - '../src/DemoBundle.php'
 ```
 
-Das ist der bevorzugte Weg, damit Symfony-Class-Attributes wie `#[When]`, `#[WhenNot]`, `#[Autoconfigure]` und `#[AutoconfigureTag]` beim Resource-Scan wirklich greifen.
+This is the preferred path so Symfony class attributes such as `#[When]`, `#[WhenNot]`, `#[Autoconfigure]`, and `#[AutoconfigureTag]` are applied during resource scans.
 
-## Wann explizite Definitionen sinnvoll bleiben
+## When Explicit Definitions Still Make Sense
 
 - `factory`
 - `alias`
 - named autowiring aliases
-- öffentliche Services
-- Spezial-Tags
-- komplexe `bind`-Definitionen
+- public services
+- special tags
+- complex `bind` definitions
 
-Beispiel für named alias + `#[Target]`:
+Example for named aliases and `#[Target]`:
 
 ```yaml
 services:
@@ -95,4 +95,4 @@ final class FormatterLocator
 }
 ```
 
-Damit ersetzt du Array-Pseudo-Services durch echte Symfony-Locators.
+This replaces array-based pseudo services with real Symfony locators.

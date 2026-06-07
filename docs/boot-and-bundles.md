@@ -1,8 +1,8 @@
-# Boot And Bundles
+# Boot and Bundles
 
 ## MU-Bootstrap
 
-Der globale Kernel wird per MU-Plugin gebootet:
+The global kernel is booted through an MU plugin:
 
 ```php
 <?php
@@ -15,11 +15,11 @@ use SymPress\Kernel\Kernel\SiteKernel;
 App::bootKernel(new SiteKernel(dirname(__DIR__, 2)));
 ```
 
-Danach booten Plugins und Themes **keinen eigenen Container** mehr. Sie liefern nur noch Bundle-Metadaten, Code und `config/`.
+After that, plugins and themes no longer boot **their own container**. They only provide bundle metadata, code, and `config/`.
 
 ## Bundle Discovery
 
-Ein Bundle wird über `composer.json > extra.kernel` registriert:
+A bundle is registered through `composer.json > extra.kernel`:
 
 ```json
 {
@@ -33,16 +33,16 @@ Ein Bundle wird über `composer.json > extra.kernel` registriert:
 }
 ```
 
-Discovery-Reihenfolge:
+Discovery order:
 
 1. MU-Plugins
 2. Plugins
 3. Theme
-4. Website-Root-Config als letzte Override-Schicht
+4. Site root config as the final override layer
 
-## Bundle-Klasse
+## Bundle Class
 
-Die Bundle-Klasse bleibt bewusst klein:
+The bundle class intentionally stays small:
 
 ```php
 <?php
@@ -58,4 +58,4 @@ final class ProjectBundle extends AbstractBundle
 }
 ```
 
-Nur wenn du Compiler-Passes oder Container-Anpassungen brauchst, überschreibst du `build(ContainerBuilder $container)`.
+Only override `build(ContainerBuilder $container)` when you need compiler passes or container customization.

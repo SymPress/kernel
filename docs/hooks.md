@@ -1,8 +1,8 @@
 # Hooks
 
-Hooks bleiben deklarativ und containerbasiert.
+Hooks stay declarative and container-based.
 
-## YAML-Tags
+## YAML Tags
 
 ```yaml
 services:
@@ -11,17 +11,17 @@ services:
             - { name: kernel.hook, hook: 'admin_menu', method: register }
 ```
 
-Unterstützte Tag-Attribute:
+Supported tag attributes:
 
 - `hook`
-- `method` optional, default `__invoke`
-- `type` optional, `action` oder `filter`
-- `priority` optional, default `10`
-- `accepted_args` optional, wird sonst aus der Methodensignatur abgeleitet
+- `method` optional, defaults to `__invoke`
+- `type` optional, `action` or `filter`
+- `priority` optional, defaults to `10`
+- `accepted_args` optional, otherwise inferred from the method signature
 
 ## `#[AsHook]`
 
-Der Kernel bringt `#[AsHook]` als WordPress-spezifisches Attribut mit.
+The kernel provides `#[AsHook]` as a WordPress-specific attribute.
 
 Class-Level:
 
@@ -47,10 +47,10 @@ final class AdminNotice
 }
 ```
 
-Wenn `method` bei einer Methoden-Annotation nicht gesetzt ist, verwendet der Kernel automatisch den annotierten Methodennamen.
+When `method` is not set on a method annotation, the kernel automatically uses the annotated method name.
 
-## Empfehlung
+## Recommendation
 
-- YAML für zentrale Registrierungen und offensichtliche Bundle-Struktur
-- `#[AsHook]` für kleine, klar abgegrenzte Hook-Klassen
-- keine versteckten Hook-Registrierungen in Plugin-Bootstraps oder `functions.php`
+- use YAML for central registrations and explicit bundle structure
+- use `#[AsHook]` for small, clearly scoped hook classes
+- avoid hidden hook registrations in plugin bootstraps or `functions.php`

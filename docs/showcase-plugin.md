@@ -1,21 +1,21 @@
 # Showcase Plugin
 
-Das Paket `sympress/kernel-showcase` ist ein Demo-Plugin fuer den Kernel.
+The `sympress/kernel-showcase` package is a demo plugin for the kernel.
 
-## Installation im Projekt
+## Project Installation
 
-Das Root-Projekt bindet es als `require-dev` ein. Danach liegt es als normales WordPress-Plugin unter `public/wp-content/plugins/kernel-showcase`.
+The root project includes it as a `require-dev` dependency. After installation, it is available as a regular WordPress plugin under `public/wp-content/plugins/kernel-showcase`.
 
-Aktivieren:
+Activate it with:
 
 ```bash
 ddev wp plugin activate kernel-showcase
 ```
 
-## Was das Plugin zeigt
+## What the Plugin Demonstrates
 
-- Resource-basiertes Laden aus `config/services.yaml`
-- Constructor-Injection per Autowiring
+- resource-based loading from `config/services.yaml`
+- constructor injection through autowiring
 - `#[Autowire(param: ...)]`
 - `#[Required]`
 - `#[Target]`
@@ -24,21 +24,21 @@ ddev wp plugin activate kernel-showcase
 - `#[AsTaggedItem]`
 - `#[Autoconfigure]`
 - `#[AutoconfigureTag]`
-- `#[When]` und `#[WhenNot]`
+- `#[When]` and `#[WhenNot]`
 - `#[Lazy]`
-- ein Hook per YAML-Tag
-- ein Hook per `#[AsHook]`
+- one hook through a YAML tag
+- one hook through `#[AsHook]`
 
-## Wo die Demo sichtbar ist
+## Where the Demo Appears
 
-Nach der Aktivierung erscheint unter `Werkzeuge > Kernel Showcase` eine Admin-Seite, die die aufgeloesten DI-Beispiele rendert.
+After activation, an admin page appears under `Tools > Kernel Showcase` and renders the resolved DI examples.
 
-Die Seite zeigt:
+The page shows:
 
-- Kernel-Environment und Debug-Status
-- Parameter-Injection
-- Setter-Injection
+- kernel environment and debug status
+- parameter injection
+- setter injection
 - named alias selection per `#[Target]`
-- Locator- und Iterator-Injektion
-- env-abhaengige Services
-- Lazy-Initialisierung
+- locator and iterator injection
+- environment-dependent services
+- lazy initialization

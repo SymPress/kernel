@@ -1,8 +1,8 @@
 # Attributes
 
-Der Kernel ergänzt Symfony nur dort, wo WordPress eine eigene Brücke braucht. Die meiste Attribut-Logik kommt direkt aus Symfony.
+The kernel only extends Symfony where WordPress needs its own bridge. Most attribute behavior comes directly from Symfony.
 
-## Unterstützte Symfony-DI-Attribute
+## Supported Symfony DI Attributes
 
 - `#[Autowire]`
 - `#[Required]`
@@ -16,18 +16,18 @@ Der Kernel ergänzt Symfony nur dort, wo WordPress eine eigene Brücke braucht. 
 - `#[AutoconfigureTag]`
 - `#[Lazy]`
 
-## WordPress-spezifisches Attribut
+## WordPress-Specific Attribute
 
 - `#[AsHook]`
 
-## Hinweise
+## Notes
 
-- `#[When]` und `#[WhenNot]` greifen nur sinnvoll, wenn Services per Resource-Scan geladen werden. Der Kernel reicht die aktuelle Environment jetzt an `YamlFileLoader` und `PhpFileLoader` weiter.
-- `#[AutoconfigureTag]` auf Interfaces oder abstrakten Klassen setzt voraus, dass diese Dateien **nicht** aus dem Resource-Scan ausgeschlossen werden.
-- `#[Required]` ist für punktuelle Setter-/Method-Injection sinnvoll. Constructor-Injection bleibt der Default.
-- `#[Lazy]` ist gut für teure Services oder Integrationen, die nicht in jedem Request materialisiert werden sollen.
+- `#[When]` and `#[WhenNot]` are only useful when services are loaded through resource scans. The kernel passes the current environment to `YamlFileLoader` and `PhpFileLoader`.
+- `#[AutoconfigureTag]` on interfaces or abstract classes requires those files to **not** be excluded from the resource scan.
+- `#[Required]` is useful for targeted setter or method injection. Constructor injection remains the default.
+- `#[Lazy]` is a good fit for expensive services or integrations that should not be materialized on every request.
 
-## Beispiel
+## Example
 
 ```php
 #[Lazy]
