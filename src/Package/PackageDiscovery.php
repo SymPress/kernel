@@ -87,8 +87,18 @@ final class PackageDiscovery
             $display['name'],
             $display['description'],
             $display['version'],
-            $this->resolver->isActive($type, $entry, $installPath),
+            $this->isDiscoverablePackage($type, $entry, $installPath)
+                && $this->requirementsActive($this->kernelRequirements($kernel)),
         );
+    }
+
+    private function isDiscoverablePackage(string $type, string $entry, string $installPath): bool
+    {
+        if ($type === 'library') {
+            return true;
+        }
+
+        return $this->resolver->isActive($type, $entry, $installPath);
     }
 
     /**
@@ -258,6 +268,69 @@ final class PackageDiscovery
         }
 
         return false;
+    }
+
+    /**
+     * @param list<string> $requirements
+     */
+    private function requirementsActive(array $requirements): bool
+    {
+        foreach ($requirements as $packageName) {
+            $installPath = InstalledVersions::getInstallPath($packageName);
+
+            if (!is_string($installPath) || $installPath === '') {
+                return false;
+            }
+
+            $composerFile = sprintf('%s/composer.json', $installPath);
+
+            if (!is_file($composerFile)) {
+                return false;
+            }
+
+            $metadata = $this->composerMetadata($composerFile);
+            $kernel = $metadata['extra']['kernel'] ?? null;
+            $entry = is_array($kernel) ? (string) ($kernel['entry'] ?? '') : '';
+            $type = (string) ($metadata['type'] ?? '');
+
+            if ($entry === '' || $type === '') {
+                return false;
+            }
+
+            if (!$this->isDiscoverablePackage($type, $entry, $installPath)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param mixed $kernel
+     * @return list<string>
+     */
+    private function kernelRequirements(mixed $kernel): array
+    {
+        if (!is_array($kernel)) {
+            return [];
+        }
+
+        $requires = $kernel['requires'] ?? [];
+
+        if (is_string($requires) && $requires !== '') {
+            return [$requires];
+        }
+
+        if (!is_array($requires)) {
+            return [];
+        }
+
+        return array_values(
+            array_filter(
+                $requires,
+                static fn (mixed $package): bool => is_string($package) && $package !== '',
+            ),
+        );
     }
 
     private function nonEmptyString(mixed $value, string $fallback): string
