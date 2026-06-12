@@ -68,16 +68,16 @@ final class WpContext implements \JsonSerializable
 
         $instance = new self(
             [
-                self::AJAX => $isAjax,
-                self::BACKOFFICE => $isAdmin,
-                self::CLI => $isCli,
-                self::CORE => ($isCore || $xmlRpc) && (!$installing || $isWpActivate),
-                self::CRON => $isCron,
+                self::AJAX        => $isAjax,
+                self::BACKOFFICE  => $isAdmin,
+                self::CLI         => $isCli,
+                self::CORE        => ($isCore || $xmlRpc) && (!$installing || $isWpActivate),
+                self::CRON        => $isCron,
                 self::FRONTOFFICE => $isFront,
-                self::INSTALLING => $installing && !$isWpActivate,
-                self::LOGIN => $isLogin,
-                self::REST => $isRest,
-                self::XML_RPC => $xmlRpc && !$installing,
+                self::INSTALLING  => $installing && !$isWpActivate,
+                self::LOGIN       => $isLogin,
+                self::REST        => $isRest,
+                self::XML_RPC     => $xmlRpc && !$installing,
                 self::WP_ACTIVATE => $isWpActivate,
             ],
         );
@@ -272,22 +272,24 @@ final class WpContext implements \JsonSerializable
         }
 
         $this->actionCallbacks = [
-            'login_init' => function (): void {
+            'login_init'        => function (): void {
                 $this->resetAndForce(self::LOGIN);
             },
-            'rest_api_init' => function (): void {
+            'rest_api_init'     => function (): void {
                 $this->resetAndForce(self::REST);
             },
-            'activate_header' => function (): void {
+            'activate_header'   => function (): void {
                 $this->resetAndForce(self::WP_ACTIVATE);
             },
             'template_redirect' => function (): void {
                 $this->resetAndForce(self::FRONTOFFICE);
             },
-            'current_screen' => function (\WP_Screen $screen): void {
-                if ($screen->in_admin()) {
-                    $this->resetAndForce(self::BACKOFFICE);
+            'current_screen'    => function (\WP_Screen $screen): void {
+                if (!$screen->in_admin()) {
+                    return;
                 }
+
+                $this->resetAndForce(self::BACKOFFICE);
             },
         ];
 
@@ -316,8 +318,10 @@ final class WpContext implements \JsonSerializable
         $cli = $this->isWpCli();
         $this->force($context);
 
-        if ($cli) {
-            $this->withCli();
+        if (!$cli) {
+            return;
         }
+
+        $this->withCli();
     }
 }
