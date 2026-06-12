@@ -16,15 +16,13 @@ final class AsHook
     ) {
     }
 
-    /**
-     * @return array<string, int|string>
-     */
+    /** @return array<string, int|string> */
     public function toTag(): array
     {
         $tag = [
-            'hook' => $this->hook,
-            'method' => $this->method,
-            'type' => $this->type,
+            'hook'     => $this->hook,
+            'method'   => $this->method,
+            'type'     => $this->type,
             'priority' => $this->priority,
         ];
 
