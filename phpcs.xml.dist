@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<ruleset name="SymPress Kernel">
+    <description>
+        SymPress coding standard audit for the kernel package.
+    </description>
+
+    <arg name="colors" />
+    <arg value="sp" />
+    <arg name="basepath" value="." />
+
+    <config name="testVersion" value="8.5-" />
+
+    <file>src</file>
+    <file>tests</file>
+
+    <exclude-pattern>vendor/*</exclude-pattern>
+    <exclude-pattern>.phpunit.cache/*</exclude-pattern>
+
+    <rule ref="SymPress-Pure">
+        <exclude name="Generic.Files.OneObjectStructurePerFile.MultipleFound" />
+        <exclude name="PSR1.Classes.ClassDeclaration.MultipleClasses" />
+        <exclude name="SlevomatCodingStandard.Classes.ForbiddenPublicProperty.ForbiddenPublicProperty" />
+        <exclude name="SlevomatCodingStandard.Commenting.RequireOneLineDocComment.MultiLineDocComment" />
+        <exclude name="SlevomatCodingStandard.Commenting.RequireOneLinePropertyDocComment.MultiLinePropertyComment" />
+        <exclude name="SlevomatCodingStandard.Functions.UnusedParameter.UnusedParameter" />
+        <exclude name="SlevomatCodingStandard.Namespaces.UseSpacing.IncorrectLinesCountBeforeFirstUse" />
+        <exclude name="SlevomatCodingStandard.Variables.DisallowSuperGlobalVariable.DisallowedSuperGlobalVariable" />
+        <exclude name="Squiz.Classes.ClassDeclaration.MultipleClasses" />
+        <exclude name="Squiz.Classes.ClassDeclaration.NewlinesAfterCloseBrace" />
+        <exclude name="Squiz.Classes.ClassDeclaration.SpaceBeforeCloseBrace" />
+        <exclude name="Squiz.Classes.ClassFileName.NoMatch" />
+        <exclude name="SymPress.Arrays.ArrayDoubleArrowAlignment.AssignmentsNotAligned" />
+        <exclude name="SymPress.Classes.AccessorNaming.GetterRequired" />
+        <exclude name="SymPress.Files.LineLength.TooLong" />
+        <exclude name="SymPress.Formatting.AlphabeticalUseStatements.MustBeSortedAlphabetically" />
+        <exclude name="SymPress.Functions.DisallowGlobalFunction.Found" />
+        <exclude name="SymPress.Functions.FunctionBodyStart.WrongForMultiLineDeclaration" />
+        <exclude name="SymPress.Functions.FunctionLength.TooLong" />
+        <exclude name="SymPress.Variables.RedundantAssignment.Found" />
+    </rule>
+
+    <rule ref="SymPress.Namespaces.Psr4">
+        <properties>
+            <property name="psr4" type="array">
+                <element key="SymPress\Kernel" value="src" />
+                <element key="SymPress\Kernel\Tests" value="tests" />
+                <element key="SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src" value="tests/Fixtures/AttributeBundle/src" />
+                <element key="SymPress\Kernel\Tests\Fixtures\HookBundle\Src" value="tests/Fixtures/HookBundle/src" />
+            </property>
+            <property name="exclude" type="array">
+                <element value="SymPress\Kernel\Tests\Hook\TestHook" />
+                <element value="SymPress\Kernel\Tests\Hook\LazyHookService" />
+                <element value="SymPress\Kernel\Tests\Hook\LazyHookContainer" />
+                <element value="SymPress\Kernel\Tests\RuntimeContainer" />
+            </property>
+        </properties>
+    </rule>
+</ruleset>
