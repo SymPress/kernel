@@ -39,16 +39,16 @@ final class VipLocations implements Locations
                 $config,
                 [
                     LocationResolver::DIR => [
-                        self::IMAGES => sprintf('%simages/', $contentDir),
+                        self::IMAGES            => sprintf('%simages/', $contentDir),
                         self::CLIENT_MU_PLUGINS => $clientMuDir,
-                        self::VENDOR => sprintf('%svendor/', $clientMuDir),
-                        self::PRIVATE => $privateDir,
-                        self::VIP_CONFIG => sprintf('%svip-config/', $abspath),
+                        self::VENDOR            => sprintf('%svendor/', $clientMuDir),
+                        self::PRIVATE           => $privateDir,
+                        self::VIP_CONFIG        => sprintf('%svip-config/', $abspath),
                     ],
                     LocationResolver::URL => [
-                        self::IMAGES => sprintf('%simages', $contentUrl),
+                        self::IMAGES            => sprintf('%simages', $contentUrl),
                         self::CLIENT_MU_PLUGINS => $clientMuUrl,
-                        self::VENDOR => sprintf('%svendor/', $clientMuUrl),
+                        self::VENDOR            => sprintf('%svendor/', $clientMuUrl),
                     ],
                 ],
             ),

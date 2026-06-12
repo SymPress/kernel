@@ -27,7 +27,7 @@ final class WpEngineLocations implements Locations
                 [
                     LocationResolver::DIR => [
                         self::PRIVATE => wp_normalize_path((string) ABSPATH) . '_wpeprivate/',
-                        self::VENDOR => sprintf('%s/vendor/', $muDir),
+                        self::VENDOR  => sprintf('%s/vendor/', $muDir),
                     ],
                     LocationResolver::URL => [
                         self::VENDOR => content_url('/mu-plugins/vendor/'),

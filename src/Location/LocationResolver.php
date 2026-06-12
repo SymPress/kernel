@@ -13,23 +13,20 @@ final class LocationResolver
 
     private const array CONTENT_LOCATIONS = [
         Locations::MU_PLUGINS => 'mu-plugins/',
-        Locations::LANGUAGES => 'languages/',
-        Locations::PLUGINS => 'plugins/',
-        Locations::THEMES => 'themes/',
+        Locations::LANGUAGES  => 'languages/',
+        Locations::PLUGINS    => 'plugins/',
+        Locations::THEMES     => 'themes/',
     ];
 
-    /**
-     * @var array<string, array<string, string|null>>
-     */
+    /** @var array<string, array<string, string|null>> */
     private array $locations;
 
-    /**
-     * @param array<string, array<string, string>> $extendedDefaults
-     */
+    /** @param array<string, array<string, string>> $extendedDefaults */
     public function __construct(
         private readonly EnvConfig $config,
         array $extendedDefaults = [],
     ) {
+
         $vendorPath = $this->discoverVendorPath();
         $contentPath = trailingslashit(wp_normalize_path((string) WP_CONTENT_DIR));
         $contentUrl = content_url('/');
@@ -42,13 +39,13 @@ final class LocationResolver
 
         $locations = [
             self::DIR => [
-                Locations::ROOT => trailingslashit((string) ABSPATH),
-                Locations::VENDOR => $vendorPath,
+                Locations::ROOT    => trailingslashit((string) ABSPATH),
+                Locations::VENDOR  => $vendorPath,
                 Locations::CONTENT => $contentPath,
             ],
             self::URL => [
-                Locations::ROOT => network_site_url('/'),
-                Locations::VENDOR => $vendorUrl,
+                Locations::ROOT    => network_site_url('/'),
+                Locations::VENDOR  => $vendorUrl,
                 Locations::CONTENT => $contentUrl,
             ],
         ];
@@ -141,9 +138,7 @@ final class LocationResolver
         return $base . ltrim((string) $subDir, '\\/');
     }
 
-    /**
-     * @return array<string, array<string, string>>
-     */
+    /** @return array<string, array<string, string>> */
     private function locationsByConfig(EnvConfig $config): array
     {
         $locations = $config->get('LOCATIONS');
@@ -166,15 +161,19 @@ final class LocationResolver
         $customUrls = is_array($locations[self::URL] ?? null) ? $locations[self::URL] : [];
 
         foreach ($customDirs as $key => $customDir) {
-            if (is_string($key) && is_string($customDir) && $key !== '' && $customDir !== '') {
-                $custom[self::DIR][$key] = trailingslashit(wp_normalize_path($customDir));
+            if (!is_string($key) || !is_string($customDir) || $key === '' || $customDir === '') {
+                continue;
             }
+
+            $custom[self::DIR][$key] = trailingslashit(wp_normalize_path($customDir));
         }
 
         foreach ($customUrls as $key => $customUrl) {
-            if (is_string($key) && is_string($customUrl) && $key !== '' && $customUrl !== '') {
-                $custom[self::URL][$key] = trailingslashit($customUrl);
+            if (!is_string($key) || !is_string($customUrl) || $key === '' || $customUrl === '') {
+                continue;
             }
+
+            $custom[self::URL][$key] = trailingslashit($customUrl);
         }
 
         return array_filter($custom);
