@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Kernel;
 
+use Psr\Container\ContainerInterface as PsrContainerInterface;
+use SymPress\Kernel\App;
 use SymPress\Kernel\Attribute\AsHook;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Console\ConsoleApplicationFactory;
@@ -16,11 +18,10 @@ use SymPress\Kernel\Hook\HookLoader;
 use SymPress\Kernel\Resolver\ActivePackageResolver;
 use SymPress\Kernel\SiteConfig;
 use SymPress\Kernel\WpContext;
-use Psr\Container\ContainerInterface as PsrContainerInterface;
+use Symfony\Component\Config\FileLocator;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\DependencyInjection\AddConsoleCommandPass;
-use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ChildDefinition;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
@@ -36,9 +37,7 @@ abstract class AbstractKernel implements KernelInterface
     protected readonly WpContext $context;
     protected bool $booted = false;
 
-    /**
-     * @var array<int, true>
-     */
+    /** @var array<int, true> */
     private array $preparedBuilders = [];
 
     public function __construct(
@@ -48,6 +47,7 @@ abstract class AbstractKernel implements KernelInterface
         ?SiteConfig $config = null,
         ?WpContext $context = null,
     ) {
+
         $this->config = $config ?? new EnvConfig();
         $this->context = $context ?? WpContext::determine();
         $this->environment = $environment ?? $this->config->env();
@@ -87,7 +87,7 @@ abstract class AbstractKernel implements KernelInterface
 
     public function discoverBundles(): BundleRegistry
     {
-        return (new BundleDiscovery(new ActivePackageResolver()))->discover();
+        return (new BundleDiscovery(new ActivePackageResolver(), $this->packagePrefixes()))->discover();
     }
 
     public function configureContainer(
@@ -95,12 +95,14 @@ abstract class AbstractKernel implements KernelInterface
         Container $container,
         BundleRegistry $bundles,
     ): array {
+
         $this->prepareBuilder($builder);
         $builder->setParameter('kernel.project_dir', $this->projectDir);
         $builder->setParameter('kernel.environment', $this->environment);
         $builder->setParameter('kernel.debug', $this->debug);
         $builder->setParameter('kernel.cache_dir', $this->getCacheDir());
         $builder->setParameter('kernel.logs_dir', sprintf('%s/var/log', $this->projectDir));
+        $builder->setParameter('kernel.package_prefixes', $this->packagePrefixes());
 
         foreach ($bundles->all() as $bundle) {
             $bundle->bundle()->build($builder);
@@ -156,6 +158,7 @@ abstract class AbstractKernel implements KernelInterface
         BundleRegistry $bundles,
         array $configFiles,
     ): void {
+
         $cacheDir = $this->getCacheDir();
         $filesystem = new Filesystem();
         $filesystem->mkdir($cacheDir);
@@ -199,8 +202,8 @@ abstract class AbstractKernel implements KernelInterface
                     var_export(
                         [
                             'fingerprint' => $fingerprint,
-                            'class' => $class,
-                            'file' => basename($containerFile),
+                            'class'       => $class,
+                            'file'        => basename($containerFile),
                         ],
                         true,
                     ),
@@ -228,9 +231,7 @@ abstract class AbstractKernel implements KernelInterface
         $this->booted = false;
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     private function configDirectories(BundleRegistry $bundles): array
     {
         $directories = [];
@@ -252,9 +253,78 @@ abstract class AbstractKernel implements KernelInterface
         return array_values(array_unique($directories));
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return list<string> */
+    private function packagePrefixes(): array
+    {
+        $configured = $this->config->get('KERNEL_PACKAGE_PREFIXES', null);
+
+        if ($configured === null) {
+            $configured = $this->composerKernelPackagePrefixes();
+        }
+
+        return $this->normalizePackagePrefixes($configured);
+    }
+
+    private function composerKernelPackagePrefixes(): mixed
+    {
+        $composerFile = sprintf('%s/composer.json', $this->projectDir);
+
+        if (!is_file($composerFile)) {
+            return null;
+        }
+
+        $contents = file_get_contents($composerFile);
+
+        if (!is_string($contents) || $contents === '') {
+            return null;
+        }
+
+        $metadata = json_decode($contents, true);
+
+        if (!is_array($metadata)) {
+            return null;
+        }
+
+        $kernel = $metadata['extra']['kernel'] ?? null;
+
+        if (!is_array($kernel)) {
+            return null;
+        }
+
+        return $kernel['package_prefixes'] ?? $kernel['packagePrefixes'] ?? null;
+    }
+
+    /** @return list<string> */
+    private function normalizePackagePrefixes(mixed $packagePrefixes): array
+    {
+        if (is_string($packagePrefixes)) {
+            $packagePrefixes = preg_split('/[,\s]+/', $packagePrefixes) ?: [];
+        }
+
+        if (!is_array($packagePrefixes)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($packagePrefixes as $prefix) {
+            if (!is_scalar($prefix) && !$prefix instanceof \Stringable) {
+                continue;
+            }
+
+            $prefix = trim((string) $prefix);
+
+            if ($prefix === '') {
+                continue;
+            }
+
+            $normalized[] = str_ends_with($prefix, '/') ? $prefix : "{$prefix}/";
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    /** @return array<int, string> */
     private function resolveConfigFiles(string $configDir): array
     {
         $files = [];
@@ -268,9 +338,7 @@ abstract class AbstractKernel implements KernelInterface
         return $files;
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     private function runtimeConfigFiles(BundleRegistry $bundles): array
     {
         $files = [];
@@ -282,9 +350,7 @@ abstract class AbstractKernel implements KernelInterface
         return array_values(array_unique($files));
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     private function patterns(string $configDir): array
     {
         $env = $this->environment;
@@ -320,9 +386,7 @@ abstract class AbstractKernel implements KernelInterface
         throw new \RuntimeException(sprintf('Unsupported config file "%s".', $file));
     }
 
-    /**
-     * @param array<int, string> $configFiles
-     */
+    /** @param array<int, string> $configFiles */
     private function fingerprint(BundleRegistry $bundles, array $configFiles): string
     {
         sort($configFiles);
@@ -359,14 +423,14 @@ abstract class AbstractKernel implements KernelInterface
         $this->ensureSynthetic($runtime, Container::CONFIG_ID, SiteConfig::class);
         $this->ensureSynthetic($runtime, Container::CONTEXT_ID, WpContext::class);
         $this->ensureSynthetic($runtime, Container::KERNEL_ID, KernelInterface::class);
-        $this->ensureSynthetic($runtime, Container::APP_ID, \SymPress\Kernel\App::class);
+        $this->ensureSynthetic($runtime, Container::APP_ID, App::class);
 
         $runtime->setAlias(Container::class, Container::CONTAINER_ID)->setPublic(true);
         $runtime->setAlias(PsrContainerInterface::class, Container::CONTAINER_ID)->setPublic(true);
         $runtime->setAlias(SiteConfig::class, Container::CONFIG_ID)->setPublic(true);
         $runtime->setAlias(WpContext::class, Container::CONTEXT_ID)->setPublic(true);
         $runtime->setAlias(KernelInterface::class, Container::KERNEL_ID)->setPublic(true);
-        $runtime->setAlias(\SymPress\Kernel\App::class, Container::APP_ID)->setPublic(true);
+        $runtime->setAlias(App::class, Container::APP_ID)->setPublic(true);
 
         return $runtime;
     }
@@ -390,15 +454,14 @@ abstract class AbstractKernel implements KernelInterface
         $targetPasses->setAfterRemovingPasses($sourcePasses->getAfterRemovingPasses());
     }
 
-    /**
-     * @param array<string, mixed> $metadata
-     */
+    /** @param array<string, mixed> $metadata */
     private function useCachedRuntimeContainer(
         Container $container,
         string $cacheDir,
         array $metadata,
         string $fingerprint,
     ): bool {
+
         if (
             ($metadata['fingerprint'] ?? null) !== $fingerprint
             || !is_string($metadata['class'] ?? null)
@@ -558,21 +621,23 @@ abstract class AbstractKernel implements KernelInterface
             );
         }
 
-        if (!$builder->hasDefinition(WpCliConsoleBridge::class)) {
-            $builder->setDefinition(
-                WpCliConsoleBridge::class,
-                (new Definition(WpCliConsoleBridge::class))
-                    ->setArguments([new Reference(Application::class)])
-                    ->addTag(
-                        HookLoader::TAG,
-                        [
-                            'hook' => 'muplugins_loaded',
-                            'method' => 'register',
-                            'priority' => 1,
-                        ],
-                    ),
-            );
+        if ($builder->hasDefinition(WpCliConsoleBridge::class)) {
+            return;
         }
+
+        $builder->setDefinition(
+            WpCliConsoleBridge::class,
+            (new Definition(WpCliConsoleBridge::class))
+                ->setArguments([new Reference(Application::class)])
+                ->addTag(
+                    HookLoader::TAG,
+                    [
+                        'hook'     => 'muplugins_loaded',
+                        'method'   => 'register',
+                        'priority' => 1,
+                    ],
+                ),
+        );
     }
 
     private function registerConsoleAttributes(ContainerBuilder $builder): void

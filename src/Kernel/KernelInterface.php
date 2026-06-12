@@ -24,9 +24,7 @@ interface KernelInterface
 
     public function tryUseRuntimeContainer(Container $container, BundleRegistry $bundles): bool;
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     public function configureContainer(
         ContainerBuilder $builder,
         Container $container,
@@ -35,9 +33,7 @@ interface KernelInterface
 
     public function build(ContainerBuilder $builder): void;
 
-    /**
-     * @param array<int, string> $configFiles
-     */
+    /** @param array<int, string> $configFiles */
     public function createRuntimeContainer(
         Container $container,
         BundleRegistry $bundles,
