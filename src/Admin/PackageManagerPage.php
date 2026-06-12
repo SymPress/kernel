@@ -39,9 +39,11 @@ final class PackageManagerPage
             self::MENU_POSITION,
         );
 
-        if (is_string($hook) && $hook !== '') {
-            add_action("load-{$hook}", $this->handleAction(...));
+        if (!is_string($hook) || $hook === '') {
+            return;
         }
+
+        add_action("load-{$hook}", $this->handleAction(...));
     }
 
     public function handleAction(): void
@@ -215,9 +217,7 @@ final class PackageManagerPage
         <?php
     }
 
-    /**
-     * @param list<PackageMetadata> $packages
-     */
+    /** @param list<PackageMetadata> $packages */
     private function renderTableNav(array $packages, string $which): void
     {
         ?>
@@ -279,9 +279,7 @@ final class PackageManagerPage
         );
     }
 
-    /**
-     * @param list<PackageMetadata> $packages
-     */
+    /** @param list<PackageMetadata> $packages */
     private function renderTable(array $packages): void
     {
         ?>
@@ -433,9 +431,7 @@ final class PackageManagerPage
         echo '</div>';
     }
 
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     private function rowActions(PackageMetadata $package): array
     {
         if ($package->isMustUsePlugin()) {
@@ -470,6 +466,7 @@ final class PackageManagerPage
         string $label,
         string $class = '',
     ): string {
+
         if (!$this->canRun($action, $package)) {
             return '';
         }
@@ -500,19 +497,17 @@ final class PackageManagerPage
         );
     }
 
-    /**
-     * @param list<PackageMetadata> $packages
-     */
+    /** @param list<PackageMetadata> $packages */
     private function renderViews(array $packages): void
     {
         $counts = $this->counts($packages);
         $views = [
-            'all' => __('All'),
-            'active' => __('Active'),
+            'all'      => __('All'),
+            'active'   => __('Active'),
             'inactive' => __('Inactive'),
-            'mustuse' => __('Must-Use', 'sympress-kernel'),
-            'plugins' => __('Plugins'),
-            'themes' => __('Themes'),
+            'mustuse'  => __('Must-Use', 'sympress-kernel'),
+            'plugins'  => __('Plugins'),
+            'themes'   => __('Themes'),
         ];
         $currentView = $this->currentView();
         $items = [];
@@ -582,6 +577,7 @@ final class PackageManagerPage
         int $failed,
         string $lastError,
     ): string {
+
         $message = match ($action) {
             'activate' => sprintf(
                 /* translators: %s: Number of packages. */
@@ -812,9 +808,11 @@ final class PackageManagerPage
             do_action('delete_plugin', $package->entry());
         }
 
-        if ($package->isTheme()) {
-            do_action('delete_theme', $package->entry());
+        if (!$package->isTheme()) {
+            return;
         }
+
+        do_action('delete_theme', $package->entry());
     }
 
     private function afterSymlinkDelete(PackageMetadata $package, bool $deleted): void
@@ -823,9 +821,11 @@ final class PackageManagerPage
             do_action('deleted_plugin', $package->entry(), $deleted);
         }
 
-        if ($package->isTheme()) {
-            do_action('deleted_theme', $package->entry(), $deleted);
+        if (!$package->isTheme()) {
+            return;
         }
+
+        do_action('deleted_theme', $package->entry(), $deleted);
     }
 
     private function deleteResultToError(mixed $result): ?\WP_Error
@@ -942,12 +942,12 @@ final class PackageManagerPage
     private function counts(array $packages): array
     {
         $counts = [
-            'all' => count($packages),
-            'active' => 0,
+            'all'      => count($packages),
+            'active'   => 0,
             'inactive' => 0,
-            'mustuse' => 0,
-            'plugins' => 0,
-            'themes' => 0,
+            'mustuse'  => 0,
+            'plugins'  => 0,
+            'themes'   => 0,
         ];
 
         foreach ($packages as $package) {
@@ -961,9 +961,11 @@ final class PackageManagerPage
                 ++$counts['plugins'];
             }
 
-            if ($package->isTheme()) {
-                ++$counts['themes'];
+            if (!$package->isTheme()) {
+                continue;
             }
+
+            ++$counts['themes'];
         }
 
         return $counts;
@@ -987,7 +989,7 @@ final class PackageManagerPage
         $args = array_merge(
             $this->currentViewArgs(),
             [
-                self::ACTION_QUERY_VAR => $action,
+                self::ACTION_QUERY_VAR  => $action,
                 self::PACKAGE_QUERY_VAR => $package->package(),
             ],
         );
@@ -1005,9 +1007,7 @@ final class PackageManagerPage
         return $this->pageUrl($args);
     }
 
-    /**
-     * @return array<string, string>
-     */
+    /** @return array<string, string> */
     private function currentViewArgs(): array
     {
         $view = $this->currentView();
@@ -1015,9 +1015,7 @@ final class PackageManagerPage
         return $view === 'all' ? [] : [self::VIEW_QUERY_VAR => $view];
     }
 
-    /**
-     * @param array<string, mixed> $args
-     */
+    /** @param array<string, mixed> $args */
     private function pageUrl(array $args = []): string
     {
         return add_query_arg(
@@ -1052,7 +1050,7 @@ SVG;
                     array_merge(
                         $this->currentViewArgs(),
                         [
-                            self::NOTICE_QUERY_VAR => $notice,
+                            self::NOTICE_QUERY_VAR  => $notice,
                             self::MESSAGE_QUERY_VAR => $message,
                         ],
                     ),
@@ -1084,9 +1082,7 @@ SVG;
         };
     }
 
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     private function selectedPackageNames(): array
     {
         $value = $_POST['checked'] ?? [];
@@ -1104,9 +1100,11 @@ SVG;
 
             $package = sanitize_text_field(wp_unslash($package));
 
-            if ($package !== '') {
-                $packages[$package] = true;
+            if ($package === '') {
+                continue;
             }
+
+            $packages[$package] = true;
         }
 
         return array_keys($packages);
@@ -1171,9 +1169,7 @@ SVG;
         return implode(' | ', $items);
     }
 
-    /**
-     * @param array<string, string> $attributes
-     */
+    /** @param array<string, string> $attributes */
     private function htmlAttributes(array $attributes): string
     {
         $parts = [];
@@ -1191,9 +1187,11 @@ SVG;
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
         }
 
-        if (!function_exists('request_filesystem_credentials')) {
-            require_once ABSPATH . 'wp-admin/includes/file.php';
+        if (function_exists('request_filesystem_credentials')) {
+            return;
         }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
     }
 
     private function loadThemeAdminFunctions(): void
@@ -1202,9 +1200,11 @@ SVG;
             require_once ABSPATH . 'wp-admin/includes/theme.php';
         }
 
-        if (!function_exists('request_filesystem_credentials')) {
-            require_once ABSPATH . 'wp-admin/includes/file.php';
+        if (function_exists('request_filesystem_credentials')) {
+            return;
         }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
     }
 
     private function permissionDenied(): never
