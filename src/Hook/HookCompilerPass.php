@@ -33,11 +33,11 @@ final class HookCompilerPass implements CompilerPassInterface
                 $this->validateHookMethod($container, $id, $definition->getClass(), $method);
 
                 $hooks[] = [
-                    'service' => $id,
-                    'hook' => $this->stringAttribute($attributes, 'hook', $id),
-                    'method' => $method,
-                    'type' => $this->hookType($attributes, $id),
-                    'priority' => $this->intAttribute($attributes, 'priority', 10),
+                    'service'       => $id,
+                    'hook'          => $this->stringAttribute($attributes, 'hook', $id),
+                    'method'        => $method,
+                    'type'          => $this->hookType($attributes, $id),
+                    'priority'      => $this->intAttribute($attributes, 'priority', 10),
                     'accepted_args' => $this->acceptedArgs(
                         $container,
                         $id,
@@ -54,9 +54,7 @@ final class HookCompilerPass implements CompilerPassInterface
         $definition->setArgument(1, $hooks);
     }
 
-    /**
-     * @param array<string, mixed> $attributes
-     */
+    /** @param array<string, mixed> $attributes */
     private function stringAttribute(array $attributes, string $name, string $serviceId): string
     {
         $value = $attributes[$name] ?? null;
@@ -70,9 +68,7 @@ final class HookCompilerPass implements CompilerPassInterface
         );
     }
 
-    /**
-     * @param array<string, mixed> $attributes
-     */
+    /** @param array<string, mixed> $attributes */
     private function optionalStringAttribute(array $attributes, string $name, string $default): string
     {
         $value = $attributes[$name] ?? null;
@@ -84,9 +80,7 @@ final class HookCompilerPass implements CompilerPassInterface
         return $value;
     }
 
-    /**
-     * @param array<string, mixed> $attributes
-     */
+    /** @param array<string, mixed> $attributes */
     private function intAttribute(array $attributes, string $name, int $default): int
     {
         $value = $attributes[$name] ?? null;
@@ -108,9 +102,7 @@ final class HookCompilerPass implements CompilerPassInterface
         );
     }
 
-    /**
-     * @param array<string, mixed> $attributes
-     */
+    /** @param array<string, mixed> $attributes */
     private function acceptedArgsAttribute(array $attributes): int
     {
         $acceptedArgs = $this->intAttribute($attributes, 'accepted_args', 1);
@@ -124,9 +116,7 @@ final class HookCompilerPass implements CompilerPassInterface
         );
     }
 
-    /**
-     * @param array<string, mixed> $attributes
-     */
+    /** @param array<string, mixed> $attributes */
     private function hookType(array $attributes, string $serviceId): string
     {
         $type = strtolower($this->optionalStringAttribute($attributes, 'type', 'action'));
@@ -140,9 +130,7 @@ final class HookCompilerPass implements CompilerPassInterface
         );
     }
 
-    /**
-     * @param array<string, mixed> $attributes
-     */
+    /** @param array<string, mixed> $attributes */
     private function acceptedArgs(
         ContainerBuilder $container,
         string $serviceId,
@@ -150,6 +138,7 @@ final class HookCompilerPass implements CompilerPassInterface
         string $method,
         array $attributes,
     ): int {
+
         if (isset($attributes['accepted_args'])) {
             return $this->acceptedArgsAttribute($attributes);
         }
@@ -169,6 +158,7 @@ final class HookCompilerPass implements CompilerPassInterface
         ?string $class,
         string $method,
     ): void {
+
         $reflectionMethod = $this->reflectHookMethod($container, $serviceId, $class, $method);
 
         if (!$reflectionMethod instanceof \ReflectionMethod) {
@@ -190,6 +180,7 @@ final class HookCompilerPass implements CompilerPassInterface
         ?string $class,
         string $method,
     ): ?\ReflectionMethod {
+
         $className = is_string($class) && $class !== '' ? $class : $serviceId;
 
         if (!class_exists($className)) {
