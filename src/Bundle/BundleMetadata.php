@@ -46,9 +46,7 @@ final readonly class BundleMetadata
         return $this->bundle;
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     public function fingerprintParts(bool $trackSourceHashes = true): array
     {
         $reflection = new \ReflectionObject($this->bundle);

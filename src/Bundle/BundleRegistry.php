@@ -6,9 +6,7 @@ namespace SymPress\Kernel\Bundle;
 
 final class BundleRegistry implements \IteratorAggregate, \Countable
 {
-    /**
-     * @var array<int, BundleMetadata>
-     */
+    /** @var array<int, BundleMetadata> */
     private array $bundles = [];
 
     public function add(BundleMetadata $bundle): self
@@ -18,17 +16,13 @@ final class BundleRegistry implements \IteratorAggregate, \Countable
         return $this;
     }
 
-    /**
-     * @return array<int, BundleMetadata>
-     */
+    /** @return array<int, BundleMetadata> */
     public function all(): array
     {
         return $this->bundles;
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     public function configDirectories(): array
     {
         $directories = [];
@@ -46,9 +40,7 @@ final class BundleRegistry implements \IteratorAggregate, \Countable
         return $directories;
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     public function fingerprintParts(bool $trackSourceHashes = true): array
     {
         $parts = [];
