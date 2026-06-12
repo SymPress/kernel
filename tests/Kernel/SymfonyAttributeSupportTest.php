@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Tests\Kernel;
 
+use PHPUnit\Framework\TestCase;
 use SymPress\Kernel\Bundle\AbstractBundle;
 use SymPress\Kernel\Bundle\BundleMetadata;
 use SymPress\Kernel\Bundle\BundleRegistry;
@@ -13,7 +14,6 @@ use SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Service\FeatureReport;
 use SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Service\LazyProbe;
 use SymPress\Kernel\Tests\Support\TestSiteConfig;
 use SymPress\Kernel\WpContext;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -33,7 +33,7 @@ final class SymfonyAttributeSupportTest extends TestCase
         self::assertSame('{"value":"kernel"}', $snapshot['locator']['json']);
         self::assertSame(
             [
-                'primary' => 'Primary',
+                'primary'   => 'Primary',
                 'secondary' => 'Secondary',
             ],
             $snapshot['panels'],
@@ -77,7 +77,7 @@ final class SymfonyAttributeSupportTest extends TestCase
                 'attribute-bundle/attribute-bundle.php',
                 $fixturePath,
                 sprintf('%s/composer.json', $fixturePath),
-                new class($fixturePath) extends AbstractBundle {
+                new class ($fixturePath) extends AbstractBundle {
                     public function __construct(
                         private readonly string $fixturePath,
                     ) {
@@ -90,7 +90,7 @@ final class SymfonyAttributeSupportTest extends TestCase
                 },
             ),
         );
-        $kernel = new class(
+        $kernel = new class (
             dirname(__DIR__, 2),
             $environment,
             false,

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Tests;
 
-use SymPress\Kernel\WpContext;
 use PHPUnit\Framework\TestCase;
+use SymPress\Kernel\WpContext;
 
 final class WpContextTest extends TestCase
 {
