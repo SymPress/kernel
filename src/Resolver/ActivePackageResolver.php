@@ -136,6 +136,7 @@ final class ActivePackageResolver
         string $installPath,
         ?string $metadataEntry = null,
     ): bool {
+
         $activeFile = sprintf('%s/%s', rtrim($baseDir, '/'), ltrim($activeEntry, '/'));
         $metadataEntry ??= $activeEntry;
 
@@ -148,9 +149,7 @@ final class ActivePackageResolver
         return false;
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     private function installEntryCandidates(string $installPath, string ...$entries): array
     {
         $candidates = [];
