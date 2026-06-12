@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Tests;
 
+use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
 use SymPress\Kernel\App;
 use SymPress\Kernel\Container;
 use SymPress\Kernel\Kernel\KernelInterface;
 use SymPress\Kernel\Location\Locations;
 use SymPress\Kernel\SiteConfig;
 use SymPress\Kernel\WpContext;
-use Psr\Container\ContainerInterface;
-use PHPUnit\Framework\TestCase;
 
 final class ContainerTest extends TestCase
 {
@@ -55,7 +55,7 @@ final class ContainerTest extends TestCase
     private function container(): Container
     {
         $locations = $this->createMock(Locations::class);
-        $config = new class($locations) implements SiteConfig {
+        $config = new class ($locations) implements SiteConfig {
             public function __construct(
                 private readonly Locations $locations,
             ) {
@@ -103,9 +103,7 @@ final class ContainerTest extends TestCase
 
 final class RuntimeContainer implements ContainerInterface
 {
-    /**
-     * @var array<string, mixed>
-     */
+    /** @var array<string, mixed> */
     private array $services = [];
 
     public function set(string $id, mixed $service): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Tests\Kernel;
 
+use PHPUnit\Framework\TestCase;
 use SymPress\Kernel\Bundle\AbstractBundle;
 use SymPress\Kernel\Bundle\BundleMetadata;
 use SymPress\Kernel\Bundle\BundleRegistry;
@@ -11,20 +12,17 @@ use SymPress\Kernel\Kernel\AbstractKernel;
 use SymPress\Kernel\Location\Locations;
 use SymPress\Kernel\SiteConfig;
 use SymPress\Kernel\WpContext;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 
 final class ConfigPrecedenceTest extends TestCase
 {
-    /**
-     * @var array<int, string>
-     */
+    /** @var array<int, string> */
     private array $paths = [];
 
     public function testKernelLogsDirPointsToProjectVarLog(): void
     {
         $projectDir = $this->tmpPath('project');
-        $kernel = new class($projectDir, 'test', false, $this->config(), WpContext::new()->force(WpContext::CORE)) extends AbstractKernel {
+        $kernel = new class ($projectDir, 'test', false, $this->config(), WpContext::new()->force(WpContext::CORE)) extends AbstractKernel {
         };
         $container = $kernel->createContainer();
 
@@ -52,7 +50,7 @@ final class ConfigPrecedenceTest extends TestCase
         $this->writePhpConfig("{$projectDir}/config/services.php", 'site');
         file_put_contents("{$bundleDir}/composer.json", '{}');
 
-        $bundle = new class($bundleDir) extends AbstractBundle {
+        $bundle = new class ($bundleDir) extends AbstractBundle {
             public function __construct(
                 private readonly string $bundlePath,
             ) {
@@ -73,7 +71,7 @@ final class ConfigPrecedenceTest extends TestCase
                 $bundle,
             ),
         );
-        $kernel = new class($projectDir, 'test', false, $this->config(), WpContext::new()->force(WpContext::CORE)) extends AbstractKernel {
+        $kernel = new class ($projectDir, 'test', false, $this->config(), WpContext::new()->force(WpContext::CORE)) extends AbstractKernel {
         };
         $container = $kernel->createContainer();
         $loaded = $kernel->configureContainer($container->builder(), $container, $registry);
@@ -112,7 +110,8 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 return static function (ContainerConfigurator $container): void {
     $container->parameters()->set('demo.value', '%s');
 };
-PHP,
+PHP
+                ,
                 $value,
             ),
         );
@@ -122,7 +121,7 @@ PHP,
     {
         $locations = $this->createMock(Locations::class);
 
-        return new class($locations) implements SiteConfig {
+        return new class ($locations) implements SiteConfig {
             public function __construct(
                 private readonly Locations $locations,
             ) {

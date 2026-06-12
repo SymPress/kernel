@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Tests\Hook;
 
+use PHPUnit\Framework\TestCase;
 use SymPress\Kernel\Bundle\AbstractBundle;
 use SymPress\Kernel\Bundle\BundleMetadata;
 use SymPress\Kernel\Bundle\BundleRegistry;
@@ -12,7 +13,6 @@ use SymPress\Kernel\Hook\HookLoader;
 use SymPress\Kernel\Kernel\AbstractKernel;
 use SymPress\Kernel\Tests\Support\TestSiteConfig;
 use SymPress\Kernel\WpContext;
-use PHPUnit\Framework\TestCase;
 
 final class AsHookAttributeTest extends TestCase
 {
@@ -57,7 +57,7 @@ final class AsHookAttributeTest extends TestCase
                 strtolower($fixture) . '/' . strtolower($fixture) . '.php',
                 $fixturePath,
                 sprintf('%s/composer.json', $fixturePath),
-                new class($fixturePath) extends AbstractBundle {
+                new class ($fixturePath) extends AbstractBundle {
                     public function __construct(
                         private readonly string $fixturePath,
                     ) {
@@ -70,7 +70,7 @@ final class AsHookAttributeTest extends TestCase
                 },
             ),
         );
-        $kernel = new class(
+        $kernel = new class (
             dirname(__DIR__, 2),
             'test',
             false,

@@ -23,18 +23,18 @@ final class FeatureReport
     ) {
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function snapshot(): array
     {
         $notes = [];
         $statuses = [];
 
         foreach ($this->notes as $note) {
-            if ($note instanceof AutoconfiguredNoteProvider) {
-                $notes[] = $note->message();
+            if (!($note instanceof AutoconfiguredNoteProvider)) {
+                continue;
             }
+
+            $notes[] = $note->message();
         }
 
         foreach ($this->statuses as $status) {
@@ -42,16 +42,16 @@ final class FeatureReport
         }
 
         return [
-            'parameter' => $this->parameterMessage->value(),
-            'target' => $this->formatterSelection->formats(),
-            'locator' => $this->locatorSummary->formats(),
-            'panels' => $this->panelSummary->titles(),
-            'required' => $this->requiredSummary->isInjected(),
+            'parameter'   => $this->parameterMessage->value(),
+            'target'      => $this->formatterSelection->formats(),
+            'locator'     => $this->locatorSummary->formats(),
+            'panels'      => $this->panelSummary->titles(),
+            'required'    => $this->requiredSummary->isInjected(),
             'lazy_before' => $this->lazySummary->instances(),
-            'lazy_value' => $this->lazySummary->touch(),
-            'lazy_after' => $this->lazySummary->instances(),
-            'notes' => $notes,
-            'statuses' => $statuses,
+            'lazy_value'  => $this->lazySummary->touch(),
+            'lazy_after'  => $this->lazySummary->instances(),
+            'notes'       => $notes,
+            'statuses'    => $statuses,
         ];
     }
 }

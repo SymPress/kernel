@@ -15,9 +15,7 @@ final class PanelSummary
     ) {
     }
 
-    /**
-     * @return array<string, string>
-     */
+    /** @return array<string, string> */
     public function titles(): array
     {
         $titles = [];

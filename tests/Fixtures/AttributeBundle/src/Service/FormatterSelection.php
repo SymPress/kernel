@@ -17,13 +17,11 @@ final class FormatterSelection
     ) {
     }
 
-    /**
-     * @return array<string, string>
-     */
+    /** @return array<string, string> */
     public function formats(): array
     {
         return [
-            'admin' => $this->adminFormatter->format('kernel'),
+            'admin'  => $this->adminFormatter->format('kernel'),
             'report' => $this->reportFormatter->format('kernel'),
         ];
     }

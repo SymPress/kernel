@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Tests\Hook;
 
+use PHPUnit\Framework\TestCase;
 use SymPress\Kernel\Hook\HookCompilerPass;
 use SymPress\Kernel\Hook\HookLoader;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
@@ -26,9 +26,9 @@ final class HookCompilerPassTest extends TestCase
             ->addTag(
                 HookLoader::TAG,
                 [
-                    'hook' => 'init',
-                    'method' => 'register',
-                    'type' => 'action',
+                    'hook'     => 'init',
+                    'method'   => 'register',
+                    'type'     => 'action',
                     'priority' => 20,
                 ],
             );
@@ -54,7 +54,7 @@ final class HookCompilerPassTest extends TestCase
             ->addTag(
                 HookLoader::TAG,
                 [
-                    'hook' => 'init',
+                    'hook'   => 'init',
                     'method' => 'missing',
                 ],
             );
@@ -72,8 +72,8 @@ final class HookCompilerPassTest extends TestCase
             ->addTag(
                 HookLoader::TAG,
                 [
-                    'hook' => 'init',
-                    'method' => 'register',
+                    'hook'          => 'init',
+                    'method'        => 'register',
                     'accepted_args' => 'many',
                 ],
             );
