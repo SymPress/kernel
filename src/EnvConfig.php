@@ -18,39 +18,35 @@ class EnvConfig implements SiteConfig
     public const string STAGING = 'staging';
 
     private const array ENV_ALIASES = [
-        'local' => self::LOCAL,
-        'development' => self::DEVELOPMENT,
-        'dev' => self::DEVELOPMENT,
-        'develop' => self::DEVELOPMENT,
-        'staging' => self::STAGING,
-        'stage' => self::STAGING,
-        'preprod' => self::STAGING,
-        'pre-prod' => self::STAGING,
+        'local'          => self::LOCAL,
+        'development'    => self::DEVELOPMENT,
+        'dev'            => self::DEVELOPMENT,
+        'develop'        => self::DEVELOPMENT,
+        'staging'        => self::STAGING,
+        'stage'          => self::STAGING,
+        'preprod'        => self::STAGING,
+        'pre-prod'       => self::STAGING,
         'pre-production' => self::STAGING,
-        'test' => self::STAGING,
-        'uat' => self::STAGING,
-        'production' => self::PRODUCTION,
-        'prod' => self::PRODUCTION,
-        'live' => self::PRODUCTION,
+        'test'           => self::STAGING,
+        'uat'            => self::STAGING,
+        'production'     => self::PRODUCTION,
+        'prod'           => self::PRODUCTION,
+        'live'           => self::PRODUCTION,
     ];
 
     private const array HOSTING_LOCATIONS_CLASS_MAP = [
-        self::HOSTING_WPE => WpEngineLocations::class,
-        self::HOSTING_VIP => VipLocations::class,
+        self::HOSTING_WPE    => WpEngineLocations::class,
+        self::HOSTING_VIP    => VipLocations::class,
         self::HOSTING_SPACES => GenericLocations::class,
-        self::HOSTING_OTHER => GenericLocations::class,
+        self::HOSTING_OTHER  => GenericLocations::class,
     ];
 
     private string $env = '';
 
-    /**
-     * @var array<string, mixed>
-     */
+    /** @var array<string, mixed> */
     private array $data = [];
 
-    /**
-     * @var array<int, string>
-     */
+    /** @var array<int, string> */
     private array $namespaces = [];
 
     private ?Locations $locations = null;
@@ -61,9 +57,11 @@ class EnvConfig implements SiteConfig
         foreach ($namespaces as $namespace) {
             $trimmed = trim($namespace, '\\');
 
-            if ($trimmed !== '') {
-                $this->namespaces[] = $trimmed;
+            if ($trimmed === '') {
+                continue;
             }
+
+            $this->namespaces[] = $trimmed;
         }
     }
 
@@ -156,7 +154,7 @@ class EnvConfig implements SiteConfig
         }
 
         if (function_exists('is_wpe')) {
-            $env = ((int) is_wpe()) > 0 ? self::PRODUCTION : self::STAGING;
+            $env = (int) is_wpe() > 0 ? self::PRODUCTION : self::STAGING;
             $this->env = $this->normalizeEnv($env, true);
 
             return $this->env;
@@ -212,9 +210,9 @@ class EnvConfig implements SiteConfig
     public function jsonSerialize(): array
     {
         return [
-            'env' => $this->env(),
+            'env'     => $this->env(),
             'hosting' => $this->hosting(),
-            'keys' => array_keys($this->data),
+            'keys'    => array_keys($this->data),
         ];
     }
 
