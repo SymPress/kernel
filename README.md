@@ -67,8 +67,9 @@ $mailer = App::make(App\Mailer\TransactionalMailer::class);
 
 ## Minimal Bundle
 
-SymPress discovers installed `sympress/*` Composer packages that expose
-`extra.kernel` metadata.
+SymPress discovers installed Composer packages that expose `extra.kernel`
+metadata. Projects that want to narrow discovery can set
+`extra.kernel.package_prefixes` in the root `composer.json`.
 
 ```json
 {
@@ -156,7 +157,7 @@ The runtime model has four layers:
 
 1. `App` owns the singleton application instance and coordinates booting.
 2. `SiteKernel` extends `AbstractKernel` and describes the WordPress site.
-3. `BundleDiscovery` finds active SymPress packages and creates a
+3. `BundleDiscovery` finds active kernel packages and creates a
    `BundleRegistry`.
 4. `Container` wraps Symfony's `ContainerBuilder`, then delegates to the
    compiled runtime container after boot.
