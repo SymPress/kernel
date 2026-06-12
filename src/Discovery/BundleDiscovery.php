@@ -4,21 +4,24 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Discovery;
 
+use Composer\InstalledVersions;
 use SymPress\Kernel\Bundle\BundleInterface;
 use SymPress\Kernel\Bundle\BundleMetadata;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Resolver\ActivePackageResolver;
-use Composer\InstalledVersions;
 
 final class BundleDiscovery
 {
-    private const array PACKAGE_PREFIXES = [
-        'sympress/',
-    ];
+    /** @var list<string> */
+    private array $packagePrefixes;
 
+    /** @param list<string>|array<string> $packagePrefixes Optional package-name prefixes used to narrow discovery. */
     public function __construct(
         private readonly ActivePackageResolver $resolver,
+        array $packagePrefixes = [],
     ) {
+
+        $this->packagePrefixes = $this->normalizePackagePrefixes($packagePrefixes);
     }
 
     public function discover(): BundleRegistry
@@ -81,8 +84,8 @@ final class BundleDiscovery
             static function (BundleMetadata $left, BundleMetadata $right): int {
                 $priority = [
                     'wordpress-muplugin' => 0,
-                    'wordpress-plugin' => 1,
-                    'wordpress-theme' => 2,
+                    'wordpress-plugin'   => 1,
+                    'wordpress-theme'    => 2,
                 ];
 
                 $leftPriority = $priority[$left->type()] ?? 99;
@@ -114,9 +117,7 @@ final class BundleDiscovery
         return $this->resolver->isActive($type, $entry, $installPath);
     }
 
-    /**
-     * @param list<string> $requirements
-     */
+    /** @param list<string> $requirements */
     private function requirementsActive(array $requirements): bool
     {
         foreach ($requirements as $packageName) {
@@ -149,10 +150,7 @@ final class BundleDiscovery
         return true;
     }
 
-    /**
-     * @param mixed $kernel
-     * @return list<string>
-     */
+    /** @return list<string> */
     private function kernelRequirements(mixed $kernel): array
     {
         if (!is_array($kernel)) {
@@ -177,9 +175,7 @@ final class BundleDiscovery
         );
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function composerMetadata(string $composerFile): array
     {
         $contents = file_get_contents($composerFile);
@@ -193,9 +189,7 @@ final class BundleDiscovery
         return is_array($decoded) ? $decoded : [];
     }
 
-    /**
-     * @return array<int, string>
-     */
+    /** @return array<int, string> */
     private function packageNames(): array
     {
         $packages = InstalledVersions::getInstalledPackages();
@@ -216,12 +210,41 @@ final class BundleDiscovery
 
     private function isKernelPackage(string $package): bool
     {
-        foreach (self::PACKAGE_PREFIXES as $prefix) {
+        if ($this->packagePrefixes === []) {
+            return true;
+        }
+
+        foreach ($this->packagePrefixes as $prefix) {
             if (str_starts_with($package, $prefix)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string> $packagePrefixes
+     * @return list<string>
+     */
+    private function normalizePackagePrefixes(array $packagePrefixes): array
+    {
+        $normalized = [];
+
+        foreach ($packagePrefixes as $prefix) {
+            if (!is_string($prefix)) {
+                continue;
+            }
+
+            $prefix = trim($prefix);
+
+            if ($prefix === '') {
+                continue;
+            }
+
+            $normalized[] = str_ends_with($prefix, '/') ? $prefix : "{$prefix}/";
+        }
+
+        return array_values(array_unique($normalized));
     }
 }
