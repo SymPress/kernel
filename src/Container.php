@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel;
 
-use SymPress\Kernel\Kernel\KernelInterface;
 use Psr\Container\ContainerInterface;
+use SymPress\Kernel\Kernel\KernelInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
@@ -23,9 +23,7 @@ final class Container implements ContainerInterface
     private ?App $app = null;
     private ?KernelInterface $kernel = null;
 
-    /**
-     * @var array<int, ContainerInterface>
-     */
+    /** @var array<int, ContainerInterface> */
     private array $containers;
 
     public function __construct(
@@ -34,6 +32,7 @@ final class Container implements ContainerInterface
         ?ContainerBuilder $builder = null,
         ContainerInterface ...$containers,
     ) {
+
         $this->config = $config ?? new EnvConfig();
         $this->context = $context ?? WpContext::new()->force(WpContext::CORE);
         $this->builder = $builder ?? new ContainerBuilder();
@@ -230,9 +229,11 @@ final class Container implements ContainerInterface
             $this->setSyntheticService($container, self::KERNEL_ID, $this->kernel);
         }
 
-        if ($this->app instanceof App) {
-            $this->setSyntheticService($container, self::APP_ID, $this->app);
+        if (!($this->app instanceof App)) {
+            return;
         }
+
+        $this->setSyntheticService($container, self::APP_ID, $this->app);
     }
 
     private function setSyntheticService(ContainerInterface $container, string $id, mixed $service): void
