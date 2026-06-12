@@ -4,23 +4,24 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Package;
 
-use SymPress\Kernel\Resolver\ActivePackageResolver;
 use Composer\InstalledVersions;
+use SymPress\Kernel\Resolver\ActivePackageResolver;
 
 final class PackageDiscovery
 {
-    private const array PACKAGE_PREFIXES = [
-        'sympress/',
-    ];
+    /** @var list<string> */
+    private array $packagePrefixes;
 
+    /** @param list<string>|array<string> $packagePrefixes Optional package-name prefixes used to narrow discovery. */
     public function __construct(
         private readonly ActivePackageResolver $resolver,
+        array $packagePrefixes = [],
     ) {
+
+        $this->packagePrefixes = $this->normalizePackagePrefixes($packagePrefixes);
     }
 
-    /**
-     * @return list<PackageMetadata>
-     */
+    /** @return list<PackageMetadata> */
     public function all(): array
     {
         $packages = [];
@@ -111,10 +112,11 @@ final class PackageDiscovery
         string $entry,
         string $installPath,
     ): array {
+
         $data = [
-            'name' => $this->humanName((string) ($metadata['name'] ?? '')),
+            'name'        => $this->humanName((string) ($metadata['name'] ?? '')),
             'description' => (string) ($metadata['description'] ?? ''),
-            'version' => (string) ($metadata['version'] ?? ''),
+            'version'     => (string) ($metadata['version'] ?? ''),
         ];
 
         if ($type === 'wordpress-theme') {
@@ -145,12 +147,12 @@ final class PackageDiscovery
         $pluginData = get_plugin_data($pluginFile, false, false);
 
         return [
-            'name' => $this->nonEmptyString($pluginData['Name'] ?? null, $fallback['name']),
+            'name'        => $this->nonEmptyString($pluginData['Name'] ?? null, $fallback['name']),
             'description' => $this->nonEmptyString(
                 $pluginData['Description'] ?? null,
                 $fallback['description'],
             ),
-            'version' => $this->nonEmptyString(
+            'version'     => $this->nonEmptyString(
                 $pluginData['Version'] ?? null,
                 $fallback['version'],
             ),
@@ -174,12 +176,12 @@ final class PackageDiscovery
         }
 
         return [
-            'name' => $this->nonEmptyString($theme->get('Name'), $fallback['name']),
+            'name'        => $this->nonEmptyString($theme->get('Name'), $fallback['name']),
             'description' => $this->nonEmptyString(
                 $theme->get('Description'),
                 $fallback['description'],
             ),
-            'version' => $this->nonEmptyString($theme->get('Version'), $fallback['version']),
+            'version'     => $this->nonEmptyString($theme->get('Version'), $fallback['version']),
         ];
     }
 
@@ -199,9 +201,7 @@ final class PackageDiscovery
         return implode('/', $parts);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function composerMetadata(string $composerFile): array
     {
         $contents = file_get_contents($composerFile);
@@ -215,17 +215,17 @@ final class PackageDiscovery
         return is_array($decoded) ? $decoded : [];
     }
 
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     private function packageNames(): array
     {
         $packages = [];
 
         foreach (InstalledVersions::getInstalledPackages() as $package) {
-            if ($this->isKernelPackage($package)) {
-                $packages[] = $package;
+            if (!$this->isKernelPackage($package)) {
+                continue;
             }
+
+            $packages[] = $package;
         }
 
         sort($packages);
@@ -237,8 +237,8 @@ final class PackageDiscovery
     {
         $priority = [
             'wordpress-muplugin' => 0,
-            'wordpress-plugin' => 1,
-            'wordpress-theme' => 2,
+            'wordpress-plugin'   => 1,
+            'wordpress-theme'    => 2,
         ];
 
         $leftPriority = $priority[$left->type()] ?? 99;
@@ -253,7 +253,7 @@ final class PackageDiscovery
 
     private function humanName(string $packageName): string
     {
-        $name = preg_replace('/^sympress\//', '', $packageName);
+        $name = preg_replace('#^[^/]+/#', '', $packageName);
         $name = str_replace(['-', '_'], ' ', is_string($name) ? $name : $packageName);
 
         return ucwords($name);
@@ -261,7 +261,11 @@ final class PackageDiscovery
 
     private function isKernelPackage(string $package): bool
     {
-        foreach (self::PACKAGE_PREFIXES as $prefix) {
+        if ($this->packagePrefixes === []) {
+            return true;
+        }
+
+        foreach ($this->packagePrefixes as $prefix) {
             if (str_starts_with($package, $prefix)) {
                 return true;
             }
@@ -271,8 +275,31 @@ final class PackageDiscovery
     }
 
     /**
-     * @param list<string> $requirements
+     * @param array<string> $packagePrefixes
+     * @return list<string>
      */
+    private function normalizePackagePrefixes(array $packagePrefixes): array
+    {
+        $normalized = [];
+
+        foreach ($packagePrefixes as $prefix) {
+            if (!is_string($prefix)) {
+                continue;
+            }
+
+            $prefix = trim($prefix);
+
+            if ($prefix === '') {
+                continue;
+            }
+
+            $normalized[] = str_ends_with($prefix, '/') ? $prefix : "{$prefix}/";
+        }
+
+        return array_values(array_unique($normalized));
+    }
+
+    /** @param list<string> $requirements */
     private function requirementsActive(array $requirements): bool
     {
         foreach ($requirements as $packageName) {
@@ -305,10 +332,7 @@ final class PackageDiscovery
         return true;
     }
 
-    /**
-     * @param mixed $kernel
-     * @return list<string>
-     */
+    /** @return list<string> */
     private function kernelRequirements(mixed $kernel): array
     {
         if (!is_array($kernel)) {
@@ -350,8 +374,10 @@ final class PackageDiscovery
 
         $file = ABSPATH . 'wp-admin/includes/plugin.php';
 
-        if (is_file($file)) {
-            require_once $file;
+        if (!is_file($file)) {
+            return;
         }
+
+        require_once $file;
     }
 }
