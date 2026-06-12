@@ -26,7 +26,7 @@ final readonly class WpCliConsoleBridge
             $this,
             [
                 'shortdesc' => 'Run Symfony Console commands registered in the kernel.',
-                'synopsis' => '<command> [<arguments>...] [--<field>=<value>]',
+                'synopsis'  => '<command> [<arguments>...] [--<field>=<value>]',
             ],
         );
     }
@@ -59,9 +59,11 @@ final readonly class WpCliConsoleBridge
             new ConsoleOutput(),
         );
 
-        if ($status !== 0) {
-            \WP_CLI::halt($status);
+        if ($status === 0) {
+            return;
         }
+
+        \WP_CLI::halt($status);
     }
 
     /**
