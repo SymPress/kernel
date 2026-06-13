@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel;
 
-use Psr\Container\ContainerInterface;
+use Psr\Container\ContainerInterface as PsrContainerInterface;
 use SymPress\Kernel\Kernel\KernelInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Exception\ParameterNotFoundException;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
 
-final class Container implements ContainerInterface
+final class Container implements SymfonyContainerInterface
 {
     public const string APP_ID = 'kernel.app';
     public const string CONFIG_ID = 'kernel.config';
@@ -19,18 +21,18 @@ final class Container implements ContainerInterface
     public const string KERNEL_ID = 'kernel.kernel';
 
     private readonly ContainerBuilder $builder;
-    private ?ContainerInterface $runtimeContainer = null;
+    private ?PsrContainerInterface $runtimeContainer = null;
     private ?App $app = null;
     private ?KernelInterface $kernel = null;
 
-    /** @var array<int, ContainerInterface> */
+    /** @var array<int, PsrContainerInterface> */
     private array $containers;
 
     public function __construct(
         ?SiteConfig $config = null,
         ?WpContext $context = null,
         ?ContainerBuilder $builder = null,
-        ContainerInterface ...$containers,
+        PsrContainerInterface ...$containers,
     ) {
 
         $this->config = $config ?? new EnvConfig();
@@ -68,7 +70,7 @@ final class Container implements ContainerInterface
         return $this->builder;
     }
 
-    public function runtimeContainer(): ?ContainerInterface
+    public function runtimeContainer(): ?PsrContainerInterface
     {
         return $this->runtimeContainer;
     }
@@ -80,7 +82,7 @@ final class Container implements ContainerInterface
         $this->builder->setAlias(App::class, self::APP_ID)->setPublic(true);
         $this->hydrateBuilder();
 
-        if (!$this->runtimeContainer instanceof ContainerInterface) {
+        if (!$this->runtimeContainer instanceof PsrContainerInterface) {
             return;
         }
 
@@ -94,21 +96,21 @@ final class Container implements ContainerInterface
         $this->builder->setAlias(KernelInterface::class, self::KERNEL_ID)->setPublic(true);
         $this->hydrateBuilder();
 
-        if (!$this->runtimeContainer instanceof ContainerInterface) {
+        if (!$this->runtimeContainer instanceof PsrContainerInterface) {
             return;
         }
 
         $this->hydrate($this->runtimeContainer);
     }
 
-    public function addContainer(ContainerInterface $container): self
+    public function addContainer(PsrContainerInterface $container): self
     {
         $this->containers[] = $container;
 
         return $this;
     }
 
-    public function useRuntimeContainer(ContainerInterface $runtimeContainer): void
+    public function useRuntimeContainer(PsrContainerInterface $runtimeContainer): void
     {
         $this->runtimeContainer = $runtimeContainer;
         $this->hydrate($runtimeContainer);
@@ -125,42 +127,49 @@ final class Container implements ContainerInterface
         $this->hydrate($this->builder);
     }
 
-    public function get(mixed $id): mixed
+    public function set(string $id, ?object $service): void
     {
-        $this->assertString($id, __METHOD__);
+        if ($this->runtimeContainer instanceof SymfonyContainerInterface) {
+            $this->runtimeContainer->set($id, $service);
 
-        if ($this->runtimeContainer instanceof ContainerInterface) {
+            return;
+        }
+
+        $this->builder->set($id, $service);
+    }
+
+    public function get(string $id, int $invalidBehavior = self::EXCEPTION_ON_INVALID_REFERENCE): ?object
+    {
+        if ($this->runtimeContainer instanceof PsrContainerInterface) {
             if ($this->runtimeContainer->has($id)) {
-                return $this->runtimeContainer->get($id);
+                return $this->getFromContainer($this->runtimeContainer, $id, $invalidBehavior);
             }
 
             foreach ($this->containers as $container) {
                 if ($container->has($id)) {
-                    return $container->get($id);
+                    return $this->getFromContainer($container, $id, $invalidBehavior);
                 }
             }
 
-            throw new ServiceNotFoundException($id);
+            return $this->handleMissingService($id, $invalidBehavior);
         }
 
         if ($this->builder->has($id)) {
-            return $this->builder->get($id);
+            return $this->builder->get($id, $invalidBehavior);
         }
 
         foreach ($this->containers as $container) {
             if ($container->has($id)) {
-                return $container->get($id);
+                return $this->getFromContainer($container, $id, $invalidBehavior);
             }
         }
 
-        throw new ServiceNotFoundException($id);
+        return $this->handleMissingService($id, $invalidBehavior);
     }
 
-    public function has(mixed $id): bool
+    public function has(string $id): bool
     {
-        $this->assertString($id, __METHOD__);
-
-        if ($this->runtimeContainer instanceof ContainerInterface) {
+        if ($this->runtimeContainer instanceof PsrContainerInterface) {
             if ($this->runtimeContainer->has($id)) {
                 return true;
             }
@@ -187,6 +196,46 @@ final class Container implements ContainerInterface
         return false;
     }
 
+    public function initialized(string $id): bool
+    {
+        if ($this->runtimeContainer instanceof SymfonyContainerInterface) {
+            return $this->runtimeContainer->initialized($id);
+        }
+
+        if ($this->builder->has($id)) {
+            return $this->builder->initialized($id);
+        }
+
+        return false;
+    }
+
+    public function getParameter(string $name): array|bool|string|int|float|\UnitEnum|null
+    {
+        if ($this->runtimeContainer instanceof SymfonyContainerInterface) {
+            return $this->runtimeContainer->getParameter($name);
+        }
+
+        if (!$this->builder->hasParameter($name)) {
+            throw new ParameterNotFoundException($name);
+        }
+
+        return $this->builder->getParameter($name);
+    }
+
+    public function hasParameter(string $name): bool
+    {
+        if ($this->runtimeContainer instanceof SymfonyContainerInterface) {
+            return $this->runtimeContainer->hasParameter($name);
+        }
+
+        return $this->builder->hasParameter($name);
+    }
+
+    public function setParameter(string $name, array|bool|string|int|float|\UnitEnum|null $value): void
+    {
+        $this->builder->setParameter($name, $value);
+    }
+
     private function bootstrapBuilder(): void
     {
         $this->builder->setParameter('kernel.environment', $this->config->env());
@@ -195,7 +244,8 @@ final class Container implements ContainerInterface
         $this->registerSynthetic(self::CONFIG_ID, SiteConfig::class);
         $this->registerSynthetic(self::CONTEXT_ID, WpContext::class);
         $this->builder->setAlias(self::class, self::CONTAINER_ID)->setPublic(true);
-        $this->builder->setAlias(ContainerInterface::class, self::CONTAINER_ID)->setPublic(true);
+        $this->builder->setAlias(PsrContainerInterface::class, self::CONTAINER_ID)->setPublic(true);
+        $this->builder->setAlias(SymfonyContainerInterface::class, self::CONTAINER_ID)->setPublic(true);
         $this->builder->setAlias(SiteConfig::class, self::CONFIG_ID)->setPublic(true);
         $this->builder->setAlias(WpContext::class, self::CONTEXT_ID)->setPublic(true);
         $this->hydrateBuilder();
@@ -215,7 +265,7 @@ final class Container implements ContainerInterface
         );
     }
 
-    private function hydrate(ContainerInterface $container): void
+    private function hydrate(PsrContainerInterface $container): void
     {
         if (!method_exists($container, 'set')) {
             return;
@@ -236,7 +286,7 @@ final class Container implements ContainerInterface
         $this->setSyntheticService($container, self::APP_ID, $this->app);
     }
 
-    private function setSyntheticService(ContainerInterface $container, string $id, mixed $service): void
+    private function setSyntheticService(PsrContainerInterface $container, string $id, object $service): void
     {
         try {
             $container->set($id, $service);
@@ -244,18 +294,47 @@ final class Container implements ContainerInterface
         }
     }
 
-    private function assertString(mixed $value, string $method): void
-    {
-        if (is_string($value)) {
-            return;
+    private function getFromContainer(
+        PsrContainerInterface $container,
+        string $id,
+        int $invalidBehavior,
+    ): ?object {
+
+        if ($container instanceof SymfonyContainerInterface) {
+            return $container->get($id, $invalidBehavior);
         }
 
-        throw new \TypeError(
-            sprintf(
-                'Argument 1 passed to %s() must be a string, %s given.',
-                $method,
-                gettype($value),
-            ),
+        $service = $container->get($id);
+
+        if ($service === null && $invalidBehavior !== self::EXCEPTION_ON_INVALID_REFERENCE) {
+            return null;
+        }
+
+        if (is_object($service)) {
+            return $service;
+        }
+
+        throw new \RuntimeException(
+            sprintf('Service "%s" must be an object, %s returned.', $id, get_debug_type($service)),
         );
+    }
+
+    private function handleMissingService(string $id, int $invalidBehavior): ?object
+    {
+        if (
+            in_array(
+                $invalidBehavior,
+                [
+                    self::NULL_ON_INVALID_REFERENCE,
+                    self::IGNORE_ON_INVALID_REFERENCE,
+                    self::IGNORE_ON_UNINITIALIZED_REFERENCE,
+                ],
+                true,
+            )
+        ) {
+            return null;
+        }
+
+        throw new ServiceNotFoundException($id);
     }
 }

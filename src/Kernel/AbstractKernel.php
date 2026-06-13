@@ -7,6 +7,7 @@ namespace SymPress\Kernel\Kernel;
 use Psr\Container\ContainerInterface as PsrContainerInterface;
 use SymPress\Kernel\App;
 use SymPress\Kernel\Attribute\AsHook;
+use SymPress\Kernel\Bundle\BundleInterface;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Console\ConsoleApplicationFactory;
 use SymPress\Kernel\Console\WpCliConsoleBridge;
@@ -17,25 +18,65 @@ use SymPress\Kernel\Hook\HookCompilerPass;
 use SymPress\Kernel\Hook\HookLoader;
 use SymPress\Kernel\Resolver\ActivePackageResolver;
 use SymPress\Kernel\SiteConfig;
+use SymPress\Kernel\Translation\TranslationLoader;
 use SymPress\Kernel\WpContext;
-use Symfony\Component\Config\FileLocator;
+use Symfony\Component\Config\Resource\FileResource;
+use Symfony\Component\Config\Resource\SelfCheckingResourceChecker;
+use Symfony\Component\Config\ResourceCheckerConfigCacheFactory;
+use Symfony\Component\Config\ResourceCheckerInterface;
+use Symfony\Component\Config\Loader\DelegatingLoader;
+use Symfony\Component\Config\Loader\LoaderInterface;
+use Symfony\Component\Config\Loader\LoaderResolver;
+use Symfony\Component\DependencyInjection\Config\ContainerParametersResourceChecker;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\DependencyInjection\AddConsoleCommandPass;
+use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
+use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
+use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
 use Symfony\Component\DependencyInjection\ChildDefinition;
+use Symfony\Component\DependencyInjection\Compiler\AddBehaviorDescribingTagsPass;
+use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyDiContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
+use Symfony\Component\DependencyInjection\Compiler\MergeExtensionConfigurationPass;
+use Symfony\Component\DependencyInjection\Compiler\PassConfig;
+use Symfony\Component\DependencyInjection\Compiler\ResettableServicePass;
+use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
+use Symfony\Component\DependencyInjection\EnvVarProcessor;
+use Symfony\Component\DependencyInjection\EnvVarProcessorInterface;
+use Symfony\Component\DependencyInjection\Kernel\KernelInterface as SymfonyKernelInterface;
+use Symfony\Component\DependencyInjection\Loader\ClosureLoader;
+use Symfony\Component\DependencyInjection\Loader\DirectoryLoader;
+use Symfony\Component\DependencyInjection\Loader\GlobFileLoader;
+use Symfony\Component\DependencyInjection\Loader\IniFileLoader;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
+use Symfony\Component\DependencyInjection\ParameterBag\ContainerBag;
+use Symfony\Component\DependencyInjection\ParameterBag\ContainerBagInterface;
+use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\DependencyInjection\ReverseContainer;
+use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\DependencyInjection\ServicesResetter;
+use Symfony\Component\DependencyInjection\ServicesResetterInterface;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Contracts\Service\ResetInterface;
+use Symfony\Contracts\Service\ServiceSubscriberInterface;
 
 abstract class AbstractKernel implements KernelInterface
 {
     protected readonly SiteConfig $config;
     protected readonly WpContext $context;
     protected bool $booted = false;
+    protected ?float $startTime = null;
+    protected ?Container $container = null;
+    protected ?BundleRegistry $bundleRegistry = null;
+
+    /** @var array<string, BundleInterface> */
+    protected array $bundles = [];
 
     /** @var array<int, true> */
     private array $preparedBuilders = [];
@@ -52,10 +93,50 @@ abstract class AbstractKernel implements KernelInterface
         $this->context = $context ?? WpContext::determine();
         $this->environment = $environment ?? $this->config->env();
         $this->debug = $debug ?? defined('WP_DEBUG') && WP_DEBUG;
+
+        if ($this->environment === '') {
+            throw new \InvalidArgumentException(
+                sprintf('Invalid environment provided to "%s": the environment cannot be empty.', static::class),
+            );
+        }
     }
 
     protected string $environment;
     protected bool $debug;
+
+    public function __clone()
+    {
+        $this->booted = false;
+        $this->startTime = null;
+        $this->container = null;
+        $this->bundleRegistry = null;
+        $this->bundles = [];
+        $this->preparedBuilders = [];
+    }
+
+    /** @return array{project_dir: string, environment: string, debug: bool} */
+    public function __serialize(): array
+    {
+        return [
+            'project_dir'  => $this->projectDir,
+            'environment'  => $this->environment,
+            'debug'        => $this->debug,
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    public function __unserialize(array $data): void
+    {
+        $projectDir = $data['project_dir'] ?? $data["\0*\0projectDir"] ?? null;
+        $environment = $data['environment'] ?? $data["\0*\0environment"] ?? null;
+        $debug = $data['debug'] ?? $data["\0*\0debug"] ?? null;
+
+        if (!is_string($projectDir) || !is_string($environment) || !is_bool($debug)) {
+            throw new \BadMethodCallException(sprintf('Cannot unserialize %s.', static::class));
+        }
+
+        $this->__construct($projectDir, $environment, $debug);
+    }
 
     public function getProjectDir(): string
     {
@@ -74,20 +155,146 @@ abstract class AbstractKernel implements KernelInterface
 
     public function getCacheDir(): string
     {
+        $dir = $this->serverString('APP_CACHE_DIR');
+
+        if ($dir !== null) {
+            return sprintf('%s/kernel', $this->environmentDirectory($dir));
+        }
+
         return sprintf('%s/var/cache/%s/kernel', $this->projectDir, $this->environment);
+    }
+
+    public function getBuildDir(): string
+    {
+        $dir = $this->serverString('APP_BUILD_DIR');
+
+        if ($dir !== null) {
+            return sprintf('%s/kernel', $this->environmentDirectory($dir));
+        }
+
+        return $this->getCacheDir();
+    }
+
+    public function getShareDir(): ?string
+    {
+        $dir = $this->serverNullableDirectory('APP_SHARE_DIR');
+
+        if ($dir !== null) {
+            return sprintf('%s/kernel', $this->environmentDirectory($dir));
+        }
+
+        if ($this->serverValueIsFalse('APP_SHARE_DIR')) {
+            return null;
+        }
+
+        return $this->getCacheDir();
+    }
+
+    public function getLogDir(): ?string
+    {
+        $dir = $this->serverNullableDirectory('APP_LOG_DIR');
+
+        if ($dir !== null) {
+            return $this->environmentDirectory($dir);
+        }
+
+        if ($this->serverValueIsFalse('APP_LOG_DIR')) {
+            return null;
+        }
+
+        return sprintf('%s/var/log', $this->projectDir);
+    }
+
+    public function getStartTime(): float
+    {
+        return $this->debug && $this->startTime !== null ? $this->startTime : -\INF;
+    }
+
+    public function getContainer(): Container
+    {
+        if (!$this->container instanceof Container) {
+            throw new \LogicException('Cannot retrieve the container from a non-booted kernel.');
+        }
+
+        return $this->container;
+    }
+
+    /** @return array<string, BundleInterface> */
+    public function getBundles(): array
+    {
+        if (!$this->bundleRegistry instanceof BundleRegistry) {
+            $this->discoverBundles();
+        }
+
+        return $this->bundles;
+    }
+
+    public function getBundle(string $name): BundleInterface
+    {
+        $bundles = $this->getBundles();
+
+        if (isset($bundles[$name])) {
+            return $bundles[$name];
+        }
+
+        throw new \InvalidArgumentException(
+            sprintf('Bundle "%s" does not exist or it is not enabled.', $name),
+        );
+    }
+
+    public function locateResource(string $name): string
+    {
+        if (!isset($name[0]) || $name[0] !== '@') {
+            throw new \InvalidArgumentException(sprintf('A resource name must start with @ ("%s" given).', $name));
+        }
+
+        if (str_contains($name, '..')) {
+            throw new \RuntimeException(sprintf('File name "%s" contains invalid characters (..).', $name));
+        }
+
+        $resource = substr($name, 1);
+        $path = '';
+
+        if (str_contains($resource, '/')) {
+            [$bundleName, $path] = explode('/', $resource, 2);
+
+            return $this->locateBundleFile($bundleName, $path, $name);
+        }
+
+        return $this->locateBundleFile($resource, $path, $name);
+    }
+
+    private function locateBundleFile(string $bundleName, string $path, string $resourceName): string
+    {
+        $file = rtrim($this->getBundle($bundleName)->getPath(), '/') . ($path === '' ? '' : '/' . $path);
+
+        if (file_exists($file)) {
+            return $file;
+        }
+
+        throw new \InvalidArgumentException(sprintf('Unable to find file "%s".', $resourceName));
     }
 
     public function createContainer(): Container
     {
         $container = new Container($this->config, $this->context);
         $container->setKernel($this);
+        $this->container = $container;
 
         return $container;
     }
 
     public function discoverBundles(): BundleRegistry
     {
-        return (new BundleDiscovery(new ActivePackageResolver(), $this->packagePrefixes()))->discover();
+        $this->bundleRegistry = (new BundleDiscovery(
+            new ActivePackageResolver(),
+            $this->packagePrefixes(),
+            $this->projectDir,
+            $this->environment,
+        ))->discover();
+        $this->bundles = $this->bundleMap($this->bundleRegistry);
+
+        return $this->bundleRegistry;
     }
 
     public function configureContainer(
@@ -96,15 +303,48 @@ abstract class AbstractKernel implements KernelInterface
         BundleRegistry $bundles,
     ): array {
 
+        $this->bundleRegistry = $bundles;
+        $this->bundles = $this->bundleMap($bundles);
         $this->prepareBuilder($builder);
         $builder->setParameter('kernel.project_dir', $this->projectDir);
         $builder->setParameter('kernel.environment', $this->environment);
+        $builder->setParameter('container.runtime_mode', '');
+        $builder->setParameter('kernel.runtime_environment', '%env(default:kernel.environment:APP_RUNTIME_ENV)%');
+        $builder->setParameter(
+            'kernel.runtime_mode',
+            '%env(query_string:default:container.runtime_mode:APP_RUNTIME_MODE)%',
+        );
+        $builder->setParameter('kernel.runtime_mode.web', '%env(bool:default::key:web:default:kernel.runtime_mode:)%');
+        $builder->setParameter('kernel.runtime_mode.cli', '%env(not:default:kernel.runtime_mode.web:)%');
+        $builder->setParameter(
+            'kernel.runtime_mode.worker',
+            '%env(int:default::key:worker:default:kernel.runtime_mode:)%',
+        );
         $builder->setParameter('kernel.debug', $this->debug);
         $builder->setParameter('kernel.cache_dir', $this->getCacheDir());
-        $builder->setParameter('kernel.logs_dir', sprintf('%s/var/log', $this->projectDir));
+        $builder->setParameter('kernel.build_dir', $this->getBuildDir());
+        $builder->setParameter('kernel.share_dir', $this->getShareDir());
+        $builder->setParameter('kernel.logs_dir', $this->getLogDir());
         $builder->setParameter('kernel.package_prefixes', $this->packagePrefixes());
+        $builder->setParameter('kernel.translation_paths', $bundles->translationDirectories());
+        $builder->setParameter('kernel.bundles', $this->bundleClasses($bundles));
+        $builder->setParameter('kernel.bundles_metadata', $this->bundleMetadata($bundles));
+        $builder->setParameter('kernel.container_class', 'KernelContainer');
+        $builder->setParameter('.kernel.config_dir', sprintf('%s/config', $this->projectDir));
+        $builder->setParameter('.container.known_envs', $this->knownEnvironments());
+        $this->loadEnvironmentVariablesAsParameters($builder);
 
         foreach ($bundles->all() as $bundle) {
+            $extension = $bundle->bundle()->getContainerExtension();
+
+            if ($extension !== null && !$builder->hasExtension($extension->getAlias())) {
+                $builder->registerExtension($extension);
+            }
+
+            if ($bundle->bundle() instanceof CompilerPassInterface) {
+                $builder->addCompilerPass($bundle->bundle(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10000);
+            }
+
             $bundle->bundle()->build($builder);
         }
 
@@ -190,11 +430,22 @@ abstract class AbstractKernel implements KernelInterface
                 return;
             }
 
-            $runtime = $this->createRuntimeBuilder($container);
-            $runtime->compile(true);
             $class = sprintf('KernelContainer_%s', $cacheKey);
+            $runtime = $this->createRuntimeBuilder($container, $class);
+            $runtime->compile(true);
             $dumper = new PhpDumper($runtime);
-            $filesystem->dumpFile($containerFile, $dumper->dump(['class' => $class]));
+            $filesystem->dumpFile(
+                $containerFile,
+                $dumper->dump(
+                    [
+                        'class'               => $class,
+                        'debug'               => $this->debug,
+                        'file'                => $containerFile,
+                        'build_time'          => $this->containerBuildTime($runtime),
+                        'inline_class_loader' => $this->debug,
+                    ],
+                ),
+            );
             $filesystem->dumpFile(
                 $metaFile,
                 sprintf(
@@ -221,14 +472,166 @@ abstract class AbstractKernel implements KernelInterface
         }
     }
 
-    public function boot(Container $container, BundleRegistry $bundles): void
+    public function boot(?Container $container = null, ?BundleRegistry $bundles = null): void
     {
+        if ($this->booted) {
+            return;
+        }
+
+        $this->startTime ??= microtime(true);
+
+        if ($this->debug && !isset($_ENV['SHELL_VERBOSITY']) && !isset($_SERVER['SHELL_VERBOSITY'])) {
+            if (function_exists('putenv')) {
+                putenv('SHELL_VERBOSITY=3');
+            }
+
+            $_ENV['SHELL_VERBOSITY'] = '3';
+            $_SERVER['SHELL_VERBOSITY'] = '3';
+        }
+
+        $container ??= $this->container;
+        $bundles ??= $this->bundleRegistry;
+
+        if ($container instanceof Container) {
+            $this->container = $container;
+        }
+
+        if ($bundles instanceof BundleRegistry) {
+            $this->bundleRegistry = $bundles;
+            $this->bundles = $this->bundleMap($bundles);
+
+            foreach ($bundles->all() as $metadata) {
+                $bundle = $metadata->bundle();
+                $bundle->setContainer($container);
+                $bundle->boot();
+            }
+        }
+
         $this->booted = true;
     }
 
     public function shutdown(): void
     {
+        if (!$this->booted) {
+            return;
+        }
+
+        foreach (array_reverse($this->bundles) as $bundle) {
+            $bundle->shutdown();
+            $bundle->setContainer(null);
+        }
+
         $this->booted = false;
+        $this->container = null;
+        $this->bundleRegistry = null;
+        $this->bundles = [];
+    }
+
+    /** @return array<string, BundleInterface> */
+    private function bundleMap(BundleRegistry $bundles): array
+    {
+        $map = [];
+
+        foreach ($bundles->all() as $metadata) {
+            $bundle = $metadata->bundle();
+            $name = $bundle->getName();
+
+            if (isset($map[$name])) {
+                throw new \LogicException(sprintf('Trying to register two bundles with the same name "%s".', $name));
+            }
+
+            $map[$name] = $bundle;
+        }
+
+        return $map;
+    }
+
+    /** @return array<string, class-string> */
+    private function bundleClasses(BundleRegistry $bundles): array
+    {
+        $classes = [];
+
+        foreach ($bundles->all() as $metadata) {
+            $bundle = $metadata->bundle();
+            $classes[$bundle->getName()] = $bundle::class;
+        }
+
+        return $classes;
+    }
+
+    /** @return array<string, array{path: string, package: string, type: string, entry: string}> */
+    private function bundleMetadata(BundleRegistry $bundles): array
+    {
+        $metadataByName = [];
+
+        foreach ($bundles->all() as $metadata) {
+            $bundle = $metadata->bundle();
+            $metadataByName[$bundle->getName()] = [
+                'path'    => $bundle->getPath(),
+                'package' => $metadata->package(),
+                'type'    => $metadata->type(),
+                'entry'   => $metadata->entry(),
+            ];
+        }
+
+        return $metadataByName;
+    }
+
+    /** @return list<string> */
+    private function knownEnvironments(): array
+    {
+        $known = [
+            $this->environment,
+            'all',
+            'dev',
+            'development',
+            'local',
+            'prod',
+            'production',
+            'stage',
+            'staging',
+            'test',
+        ];
+        $bundlesDefinition = sprintf('%s/config/bundles.php', $this->projectDir);
+
+        if (!is_file($bundlesDefinition)) {
+            return $this->normalizeKnownEnvironments($known);
+        }
+
+        $configuration = require $bundlesDefinition;
+
+        if (!is_array($configuration)) {
+            return $this->normalizeKnownEnvironments($known);
+        }
+
+        foreach ($configuration as $envs) {
+            if (!is_array($envs)) {
+                continue;
+            }
+
+            foreach (array_keys($envs) as $environment) {
+                if (!is_string($environment)) {
+                    continue;
+                }
+
+                $known[] = $environment;
+            }
+        }
+
+        return $this->normalizeKnownEnvironments($known);
+    }
+
+    /**
+     * @param list<string> $environments
+     * @return list<string>
+     */
+    private function normalizeKnownEnvironments(array $environments): array
+    {
+        return array_values(
+            array_unique(
+                array_filter($environments, static fn (string $env): bool => $env !== ''),
+            ),
+        );
     }
 
     /** @return array<int, string> */
@@ -251,6 +654,57 @@ abstract class AbstractKernel implements KernelInterface
         }
 
         return array_values(array_unique($directories));
+    }
+
+    private function serverString(string $name): ?string
+    {
+        $value = $_SERVER[$name] ?? $_ENV[$name] ?? null;
+
+        if (!is_scalar($value) && !$value instanceof \Stringable) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+
+    private function serverNullableDirectory(string $name): ?string
+    {
+        if ($this->serverValueIsFalse($name)) {
+            return null;
+        }
+
+        return $this->serverString($name);
+    }
+
+    private function serverValueIsFalse(string $name): bool
+    {
+        $value = $_SERVER[$name] ?? $_ENV[$name] ?? null;
+
+        if ($value === null) {
+            return false;
+        }
+
+        return filter_var($value, \FILTER_VALIDATE_BOOL, \FILTER_NULL_ON_FAILURE) === false;
+    }
+
+    private function environmentDirectory(string $directory): string
+    {
+        if ($directory !== '' && in_array($directory[0], ['/', '\\'], true)) {
+            return sprintf('%s/%s', rtrim($directory, '/'), $this->environment);
+        }
+
+        if (
+            DIRECTORY_SEPARATOR === '\\'
+            && isset($directory[1])
+            && $directory[1] === ':'
+            && preg_match('/^[A-Za-z]:/', $directory) === 1
+        ) {
+            return sprintf('%s/%s', rtrim($directory, '/'), $this->environment);
+        }
+
+        return sprintf('%s/%s/%s', $this->projectDir, trim($directory, '/'), $this->environment);
     }
 
     /** @return list<string> */
@@ -354,36 +808,104 @@ abstract class AbstractKernel implements KernelInterface
     private function patterns(string $configDir): array
     {
         $env = $this->environment;
+        $extensions = '{php,yaml,yml,ini}';
 
         return [
-            sprintf('%s/packages/*.{php,yaml,yml}', $configDir),
-            sprintf('%s/packages/%s/*.{php,yaml,yml}', $configDir, $env),
-            sprintf('%s/services.{php,yaml,yml}', $configDir),
-            sprintf('%s/services_%s.{php,yaml,yml}', $configDir, $env),
-            sprintf('%s/wordpress.{php,yaml,yml}', $configDir),
-            sprintf('%s/wordpress_%s.{php,yaml,yml}', $configDir, $env),
+            sprintf('%s/packages/*.%s', $configDir, $extensions),
+            sprintf('%s/packages/%s/*.%s', $configDir, $env, $extensions),
+            sprintf('%s/services.%s', $configDir, $extensions),
+            sprintf('%s/services_%s.%s', $configDir, $env, $extensions),
+            sprintf('%s/wordpress.%s', $configDir, $extensions),
+            sprintf('%s/wordpress_%s.%s', $configDir, $env, $extensions),
         ];
     }
 
     private function loadConfigFile(ContainerBuilder $builder, string $file): void
     {
-        $locator = new FileLocator(dirname($file));
         $basename = basename($file);
         $extension = pathinfo($basename, PATHINFO_EXTENSION);
 
-        if ($extension === 'php') {
-            (new PhpFileLoader($builder, $locator, $this->environment))->load($basename);
-
-            return;
+        if (!in_array($extension, ['ini', 'php', 'yaml', 'yml'], true)) {
+            throw new \RuntimeException(sprintf('Unsupported config file "%s".', $file));
         }
 
-        if (in_array($extension, ['yaml', 'yml'], true)) {
-            (new YamlFileLoader($builder, $locator, $this->environment))->load($basename);
+        $builder->addResource(new FileResource($file));
+        $this->containerLoader($builder, dirname($file))->load($basename);
+    }
 
-            return;
+    private function containerLoader(ContainerBuilder $builder, string $currentDir): DelegatingLoader
+    {
+        $locator = new FileLocator($this, $currentDir);
+        $resolver = new LoaderResolver(
+            [
+                new YamlFileLoader($builder, $locator, $this->environment),
+                new IniFileLoader($builder, $locator, $this->environment),
+                new PhpFileLoader($builder, $locator, $this->environment),
+                new GlobFileLoader($builder, $locator, $this->environment),
+                new DirectoryLoader($builder, $locator, $this->environment),
+                new ClosureLoader($builder, $this->environment),
+            ],
+        );
+
+        return new DelegatingLoader($resolver);
+    }
+
+    private function loadEnvironmentVariablesAsParameters(ContainerBuilder $builder): void
+    {
+        $environment = array_merge($_SERVER, $_ENV);
+        $excludedPrefixes = ['DOCUMENT_', 'HTTP_', 'PHP_', 'REDIRECT_', 'REQUEST_', 'SCRIPT_'];
+        $allowedPrefixes = ['APP_', 'DB_', 'WORDPRESS_', 'WP_'];
+
+        foreach ($environment as $name => $value) {
+            $name = (string) $name;
+
+            if (!$this->shouldExposeEnvironmentParameter($name, $excludedPrefixes, $allowedPrefixes)) {
+                continue;
+            }
+
+            if (!is_bool($value) && !is_numeric($value) && !is_string($value)) {
+                continue;
+            }
+
+            $builder->setParameter(
+                sprintf('env.%s', strtolower($name)),
+                $this->sanitizeEnvironmentParameter($value),
+            );
+        }
+    }
+
+    /**
+     * @param list<string> $excludedPrefixes
+     * @param list<string> $allowedPrefixes
+     */
+    private function shouldExposeEnvironmentParameter(
+        string $name,
+        array $excludedPrefixes,
+        array $allowedPrefixes,
+    ): bool {
+
+        foreach ($excludedPrefixes as $prefix) {
+            if (str_starts_with($name, $prefix)) {
+                return false;
+            }
         }
 
-        throw new \RuntimeException(sprintf('Unsupported config file "%s".', $file));
+        foreach ($allowedPrefixes as $prefix) {
+            if (str_starts_with($name, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function sanitizeEnvironmentParameter(bool|float|int|string $value): bool|float|int|string
+    {
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        return str_replace('%', '%%', $value);
     }
 
     /** @param array<int, string> $configFiles */
@@ -411,12 +933,16 @@ abstract class AbstractKernel implements KernelInterface
         return hash('sha256', implode('|', $parts));
     }
 
-    private function createRuntimeBuilder(Container $container): ContainerBuilder
+    private function createRuntimeBuilder(Container $container, string $class): ContainerBuilder
     {
         $runtime = new ContainerBuilder();
         $this->copyExtensions($container->builder(), $runtime);
         $runtime->merge($container->builder());
         $this->copyCompilerPasses($container->builder(), $runtime);
+        $runtime->setParameter('kernel.container_class', $class);
+        $runtime->getCompilerPassConfig()->setMergePass(
+            new MergeExtensionConfigurationPass($this->registeredExtensionAliases($runtime)),
+        );
         $runtime->addCompilerPass(new HookCompilerPass());
         $runtime->addCompilerPass(new AddConsoleCommandPass());
         $this->ensureSynthetic($runtime, Container::CONTAINER_ID, Container::class);
@@ -433,6 +959,18 @@ abstract class AbstractKernel implements KernelInterface
         $runtime->setAlias(App::class, Container::APP_ID)->setPublic(true);
 
         return $runtime;
+    }
+
+    /** @return list<string> */
+    private function registeredExtensionAliases(ContainerBuilder $builder): array
+    {
+        $aliases = [];
+
+        foreach ($builder->getExtensions() as $extension) {
+            $aliases[] = $extension->getAlias();
+        }
+
+        return array_values(array_unique($aliases));
     }
 
     private function copyExtensions(ContainerBuilder $source, ContainerBuilder $target): void
@@ -505,7 +1043,24 @@ abstract class AbstractKernel implements KernelInterface
 
     private function tracksSourceChanges(): bool
     {
-        return $this->debug;
+        return $this->debug && !$this->resourceTrackingDisabled();
+    }
+
+    private function resourceTrackingDisabled(): bool
+    {
+        $value = $_SERVER['SYMFONY_DISABLE_RESOURCE_TRACKING']
+            ?? $_ENV['SYMFONY_DISABLE_RESOURCE_TRACKING']
+            ?? null;
+
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_array($value)) {
+            return $value !== [];
+        }
+
+        return filter_var($value, \FILTER_VALIDATE_BOOL, \FILTER_NULL_ON_FAILURE) ?? ((string) $value !== '');
     }
 
     private function fileFingerprint(string $file): string
@@ -534,6 +1089,29 @@ abstract class AbstractKernel implements KernelInterface
         }
 
         return 'build:implicit';
+    }
+
+    private function containerBuildTime(ContainerBuilder $builder): int
+    {
+        if ($builder->hasParameter('kernel.container_build_time')) {
+            $buildTime = $builder->getParameter('kernel.container_build_time');
+
+            if (is_int($buildTime)) {
+                return $buildTime;
+            }
+
+            if (is_string($buildTime) && ctype_digit($buildTime)) {
+                return (int) $buildTime;
+            }
+        }
+
+        $sourceDateEpoch = $_SERVER['SOURCE_DATE_EPOCH'] ?? $_ENV['SOURCE_DATE_EPOCH'] ?? null;
+
+        if (is_scalar($sourceDateEpoch) && filter_var($sourceDateEpoch, \FILTER_VALIDATE_INT) !== false) {
+            return (int) $sourceDateEpoch;
+        }
+
+        return time();
     }
 
     private function kernelSourceFingerprint(): string
@@ -572,6 +1150,8 @@ abstract class AbstractKernel implements KernelInterface
         }
 
         $this->preparedBuilders[$builderId] = true;
+        $this->registerCoreContainerServices($builder);
+        $this->registerTranslationLoader($builder);
         $this->registerHookLoader($builder);
         $this->registerConsoleApplication($builder);
         $this->registerConsoleAttributes($builder);
@@ -593,6 +1173,356 @@ abstract class AbstractKernel implements KernelInterface
         );
         $builder->addCompilerPass(new HookCompilerPass());
         $this->build($builder);
+    }
+
+    private function registerCoreContainerServices(ContainerBuilder $builder): void
+    {
+        if (!$builder->has('kernel')) {
+            $builder->setAlias('kernel', Container::KERNEL_ID)->setPublic(true);
+        }
+
+        $builder->setAlias(SymfonyKernelInterface::class, Container::KERNEL_ID)
+            ->setPublic(true);
+
+        $this->registerFilesystemService($builder);
+        $this->registerEventDispatcherServices($builder);
+        $this->registerClockService($builder);
+        $this->registerExpressionLanguageService($builder);
+
+        if (!$builder->hasDefinition('parameter_bag')) {
+            $builder->setDefinition(
+                'parameter_bag',
+                (new Definition(ContainerBag::class))
+                    ->setArguments([new Reference('service_container')]),
+            );
+        }
+
+        $builder->setAlias(ContainerBagInterface::class, 'parameter_bag')->setPublic(false);
+        $builder->setAlias(ParameterBagInterface::class, 'parameter_bag')->setPublic(false);
+
+        if (!$builder->hasDefinition('file_locator')) {
+            $builder->setDefinition(
+                'file_locator',
+                (new Definition(FileLocator::class))
+                    ->setArguments([new Reference(Container::KERNEL_ID)]),
+            );
+        }
+
+        $builder->setAlias(FileLocator::class, 'file_locator')->setPublic(false);
+
+        if (!$builder->hasDefinition('reverse_container')) {
+            $builder->setDefinition(
+                'reverse_container',
+                (new Definition(ReverseContainer::class))
+                    ->setArguments([
+                        new Reference('service_container'),
+                        new ServiceLocatorArgument([]),
+                    ]),
+            );
+        }
+
+        $builder->setAlias(ReverseContainer::class, 'reverse_container')->setPublic(false);
+
+        if (!$builder->hasDefinition('config_cache_factory')) {
+            $builder->setDefinition(
+                'config_cache_factory',
+                (new Definition(ResourceCheckerConfigCacheFactory::class))
+                    ->setArguments([new TaggedIteratorArgument('config_cache.resource_checker')]),
+            );
+        }
+
+        if (!$builder->hasDefinition('dependency_injection.config.container_parameters_resource_checker')) {
+            $builder->setDefinition(
+                'dependency_injection.config.container_parameters_resource_checker',
+                (new Definition(ContainerParametersResourceChecker::class))
+                    ->setArguments([new Reference('service_container')])
+                    ->addTag('config_cache.resource_checker', ['priority' => -980]),
+            );
+        }
+
+        if (!$builder->hasDefinition('config.resource.self_checking_resource_checker')) {
+            $builder->setDefinition(
+                'config.resource.self_checking_resource_checker',
+                (new Definition(SelfCheckingResourceChecker::class))
+                    ->addTag('config_cache.resource_checker', ['priority' => -990]),
+            );
+        }
+
+        if (!$builder->hasDefinition('services_resetter')) {
+            $builder->setDefinition(
+                'services_resetter',
+                (new Definition(ServicesResetter::class))
+                    ->setPublic(true)
+                    ->setArguments([new IteratorArgument([]), []]),
+            );
+        }
+
+        $builder->setAlias(ServicesResetterInterface::class, 'services_resetter')->setPublic(true);
+
+        if (!$builder->hasDefinition('container.env_var_processor')) {
+            $builder->setDefinition(
+                'container.env_var_processor',
+                (new Definition(EnvVarProcessor::class))
+                    ->setArguments([
+                        new Reference('service_container'),
+                        new TaggedIteratorArgument('container.env_var_loader'),
+                    ])
+                    ->addTag('container.env_var_processor')
+                    ->addTag('kernel.reset', ['method' => 'reset']),
+            );
+        }
+
+        $builder->registerForAutoconfiguration(EnvVarLoaderInterface::class)
+            ->addTag('container.env_var_loader');
+        $builder->registerForAutoconfiguration(EnvVarProcessorInterface::class)
+            ->addTag('container.env_var_processor');
+        $builder->registerForAutoconfiguration(ResourceCheckerInterface::class)
+            ->addTag('config_cache.resource_checker');
+        $builder->registerForAutoconfiguration(ServiceLocator::class)
+            ->addTag('container.service_locator');
+        $builder->registerForAutoconfiguration(ResetInterface::class)
+            ->addTag('kernel.reset', ['method' => 'reset']);
+        $builder->registerForAutoconfiguration(ServiceSubscriberInterface::class)
+            ->addTag('container.service_subscriber');
+        $builder->registerForAutoconfiguration(CompilerPassInterface::class)
+            ->addTag('container.excluded', ['source' => 'because it is a compiler pass']);
+        $builder->registerForAutoconfiguration(\UnitEnum::class)
+            ->addTag('container.excluded', ['source' => 'because it is an enum']);
+        $builder->registerAttributeForAutoconfiguration(
+            \Attribute::class,
+            static function (ChildDefinition $definition): void {
+                $definition->addTag('container.excluded', ['source' => 'because it is a PHP attribute']);
+            },
+        );
+        $this->registerOptionalAutoconfiguration($builder);
+
+        $builder->addCompilerPass(
+            new AddBehaviorDescribingTagsPass(
+                [
+                    'container.do_not_inline',
+                    'container.excluded',
+                    'container.hot_path',
+                    'container.service_locator',
+                    'container.service_subscriber',
+                    'event_dispatcher.dispatcher',
+                    'kernel.event_listener',
+                    'kernel.event_subscriber',
+                    'kernel.reset',
+                ],
+            ),
+            PassConfig::TYPE_BEFORE_OPTIMIZATION,
+            200,
+        );
+        $builder->addCompilerPass(new ResettableServicePass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -32);
+    }
+
+    private function registerFilesystemService(ContainerBuilder $builder): void
+    {
+        if (!$builder->hasDefinition('filesystem')) {
+            $builder->setDefinition('filesystem', new Definition(Filesystem::class));
+        }
+
+        $this->setAliasIfMissing($builder, Filesystem::class, 'filesystem');
+    }
+
+    private function registerEventDispatcherServices(ContainerBuilder $builder): void
+    {
+        $eventDispatcherClass = 'Symfony\Component\EventDispatcher\EventDispatcher';
+
+        if (class_exists($eventDispatcherClass) && !$builder->hasDefinition('event_dispatcher')) {
+            $builder->setDefinition(
+                'event_dispatcher',
+                (new Definition($eventDispatcherClass))
+                    ->setPublic(true)
+                    ->addTag('container.hot_path')
+                    ->addTag('event_dispatcher.dispatcher', ['name' => 'event_dispatcher']),
+            );
+        }
+
+        $this->registerEventDispatcherAliases($builder);
+
+        $registerListenersPass = 'Symfony\Component\EventDispatcher\DependencyInjection\RegisterListenersPass';
+
+        if (class_exists($registerListenersPass)) {
+            $builder->addCompilerPass(new $registerListenersPass(), PassConfig::TYPE_BEFORE_REMOVING);
+        }
+
+        foreach (
+            [
+                'Symfony\Component\EventDispatcher\EventDispatcherInterface' => 'event_dispatcher.dispatcher',
+                'Symfony\Component\EventDispatcher\EventSubscriberInterface' => 'kernel.event_subscriber',
+            ] as $interface => $tag
+        ) {
+            if (!interface_exists($interface)) {
+                continue;
+            }
+
+            $builder->registerForAutoconfiguration($interface)->addTag($tag);
+        }
+
+        $asEventListenerClass = 'Symfony\Component\EventDispatcher\Attribute\AsEventListener';
+
+        if (!class_exists($asEventListenerClass)) {
+            return;
+        }
+
+        $builder->registerAttributeForAutoconfiguration(
+            $asEventListenerClass,
+            static function (ChildDefinition $definition, object $attribute, \Reflector $reflector): void {
+                if (!$reflector instanceof \ReflectionClass && !$reflector instanceof \ReflectionMethod) {
+                    return;
+                }
+
+                $tagAttributes = array_filter(
+                    get_object_vars($attribute),
+                    static fn (mixed $value): bool => $value !== null,
+                );
+
+                if ($reflector instanceof \ReflectionMethod) {
+                    if (isset($tagAttributes['method'])) {
+                        throw new \LogicException(
+                            sprintf(
+                                'AsEventListener attribute cannot declare a method on "%s::%s()".',
+                                $reflector->class,
+                                $reflector->name,
+                            ),
+                        );
+                    }
+
+                    $tagAttributes['method'] = $reflector->getName();
+                }
+
+                $definition->addTag('kernel.event_listener', $tagAttributes);
+            },
+        );
+    }
+
+    private function registerEventDispatcherAliases(ContainerBuilder $builder): void
+    {
+        if (!$builder->hasDefinition('event_dispatcher') && !$builder->hasAlias('event_dispatcher')) {
+            return;
+        }
+
+        foreach (
+            [
+                'Symfony\Component\EventDispatcher\EventDispatcherInterface',
+                'Symfony\Contracts\EventDispatcher\EventDispatcherInterface',
+                'Psr\EventDispatcher\EventDispatcherInterface',
+            ] as $eventDispatcherInterface
+        ) {
+            if (!interface_exists($eventDispatcherInterface)) {
+                continue;
+            }
+
+            $this->setAliasIfMissing($builder, $eventDispatcherInterface, 'event_dispatcher', true);
+        }
+    }
+
+    private function registerClockService(ContainerBuilder $builder): void
+    {
+        $clockClass = 'Symfony\Component\Clock\Clock';
+
+        if (!class_exists($clockClass)) {
+            return;
+        }
+
+        if (!$builder->hasDefinition('clock')) {
+            $builder->setDefinition('clock', new Definition($clockClass));
+        }
+
+        foreach (['Symfony\Component\Clock\ClockInterface', 'Psr\Clock\ClockInterface'] as $clockInterface) {
+            if (!interface_exists($clockInterface)) {
+                continue;
+            }
+
+            $this->setAliasIfMissing($builder, $clockInterface, 'clock');
+        }
+    }
+
+    private function registerExpressionLanguageService(ContainerBuilder $builder): void
+    {
+        $expressionLanguageClass = 'Symfony\Component\DependencyInjection\ExpressionLanguage';
+
+        if (!class_exists($expressionLanguageClass) || $builder->hasDefinition('container.expression_language')) {
+            return;
+        }
+
+        $builder->setDefinition('container.expression_language', new Definition($expressionLanguageClass));
+    }
+
+    private function registerOptionalAutoconfiguration(ContainerBuilder $builder): void
+    {
+        $this->registerLoggerAwareAutoconfiguration($builder);
+        $this->registerTestCaseExclusion($builder);
+        $this->registerLoaderInterfaceExclusion($builder);
+    }
+
+    private function registerLoggerAwareAutoconfiguration(ContainerBuilder $builder): void
+    {
+        $loggerAwareInterface = 'Psr\Log\LoggerAwareInterface';
+
+        if (!interface_exists($loggerAwareInterface)) {
+            return;
+        }
+
+        $builder->registerForAutoconfiguration($loggerAwareInterface)
+            ->addMethodCall(
+                'setLogger',
+                [new Reference('logger', SymfonyDiContainerInterface::IGNORE_ON_INVALID_REFERENCE)],
+            );
+    }
+
+    private function registerTestCaseExclusion(ContainerBuilder $builder): void
+    {
+        $testCaseClass = 'PHPUnit\Framework\TestCase';
+
+        if (!class_exists($testCaseClass)) {
+            return;
+        }
+
+        $builder->registerForAutoconfiguration($testCaseClass)
+            ->addTag('container.excluded', ['source' => 'because it is a test case']);
+    }
+
+    private function registerLoaderInterfaceExclusion(ContainerBuilder $builder): void
+    {
+        if ($builder->hasDefinition(LoaderInterface::class)) {
+            return;
+        }
+
+        $builder->setDefinition(
+            LoaderInterface::class,
+            (new Definition())
+                ->setAbstract(true)
+                ->addTag('container.excluded', ['source' => 'because it is a loader interface']),
+        );
+    }
+
+    private function setAliasIfMissing(
+        ContainerBuilder $builder,
+        string $alias,
+        string $target,
+        bool $public = false,
+    ): void {
+        if ($builder->hasAlias($alias) || $builder->hasDefinition($alias)) {
+            return;
+        }
+
+        $builder->setAlias($alias, $target)->setPublic($public);
+    }
+
+    private function registerTranslationLoader(ContainerBuilder $builder): void
+    {
+        if ($builder->hasDefinition(TranslationLoader::class)) {
+            return;
+        }
+
+        $builder->setDefinition(
+            TranslationLoader::class,
+            (new Definition(TranslationLoader::class))
+                ->setPublic(true)
+                ->setArguments(['%kernel.translation_paths%']),
+        );
     }
 
     private function registerConsoleApplication(ContainerBuilder $builder): void

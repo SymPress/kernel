@@ -28,13 +28,28 @@ final class BundleRegistry implements \IteratorAggregate, \Countable
         $directories = [];
 
         foreach ($this->bundles as $bundle) {
-            $configDir = $bundle->bundle()->configPath();
+            foreach ($this->bundleConfigDirectories($bundle->bundle()) as $configDir) {
+                $directories[] = $configDir;
+            }
+        }
 
-            if ($configDir === null) {
+        return array_values(array_unique($directories));
+    }
+
+    /** @return array<string, string> */
+    public function translationDirectories(): array
+    {
+        $directories = [];
+
+        foreach ($this->bundles as $metadata) {
+            $bundle = $metadata->bundle();
+            $translationPath = $bundle->translationPath();
+
+            if (!is_string($translationPath) || $translationPath === '') {
                 continue;
             }
 
-            $directories[] = $configDir;
+            $directories[$metadata->package()] = $translationPath;
         }
 
         return $directories;
@@ -60,5 +75,16 @@ final class BundleRegistry implements \IteratorAggregate, \Countable
     public function count(): int
     {
         return count($this->bundles);
+    }
+
+    /** @return list<string> */
+    private function bundleConfigDirectories(BundleInterface $bundle): array
+    {
+        return array_values(
+            array_filter(
+                $bundle->configPaths(),
+                static fn (string $path): bool => $path !== '',
+            ),
+        );
     }
 }
