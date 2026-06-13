@@ -10,12 +10,17 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 final class FeatureReport
 {
     public function __construct(
+        private readonly AliasSummary $aliasSummary,
+        private readonly CallableSummary $callableSummary,
+        private readonly DecorationSummary $decorationSummary,
         private readonly FormatterSelection $formatterSelection,
         private readonly LazySummary $lazySummary,
         private readonly LocatorSummary $locatorSummary,
         private readonly PanelSummary $panelSummary,
         private readonly ParameterMessage $parameterMessage,
         private readonly RequiredSummary $requiredSummary,
+        private readonly ResourceTagSummary $resourceTagSummary,
+        private readonly TaggedGreetingSummary $taggedGreetingSummary,
         #[AutowireIterator('kernel_fixture.note_provider')]
         private readonly iterable $notes,
         #[AutowireIterator('kernel_fixture.status_provider', indexAttribute: 'index')]
@@ -42,7 +47,12 @@ final class FeatureReport
         }
 
         return [
+            'alias'       => $this->aliasSummary->value(),
+            'callable'    => $this->callableSummary->values(),
+            'decoration'  => $this->decorationSummary->value(),
             'parameter'   => $this->parameterMessage->value(),
+            'resource'    => $this->resourceTagSummary->values(),
+            'tagged'      => $this->taggedGreetingSummary->value(),
             'target'      => $this->formatterSelection->formats(),
             'locator'     => $this->locatorSummary->formats(),
             'panels'      => $this->panelSummary->titles(),

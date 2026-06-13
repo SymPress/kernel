@@ -1,5 +1,6 @@
 parameters:
     kernel_fixture.parameter_message: 'attribute-driven'
+    kernel_fixture.resource_tags: []
 
 services:
     _defaults:
@@ -21,3 +22,6 @@ services:
 
     SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Contract\LazyProbeInterface:
         alias: SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Service\LazyProbe
+
+    SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Contract\TaggedGreetingInterface:
+        alias: SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src\Service\TaggedGreeting
