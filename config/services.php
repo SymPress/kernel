@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use SymPress\Kernel\Admin\PackageManagerPage;
+use SymPress\Kernel\Console\ContainerDumpCommand;
+use SymPress\Kernel\Console\DebugContainerCommand;
+use SymPress\Kernel\Console\LintContainerCommand;
 use SymPress\Kernel\Package\PackageDiscovery;
 use SymPress\Kernel\Resolver\ActivePackageResolver;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -18,6 +21,9 @@ return static function (ContainerConfigurator $container): void {
         ->autoconfigure();
 
     $services->set(ActivePackageResolver::class);
+    $services->set(ContainerDumpCommand::class);
+    $services->set(DebugContainerCommand::class);
+    $services->set(LintContainerCommand::class);
     $services->set(PackageDiscovery::class)
         ->arg('$packagePrefixes', '%kernel.package_prefixes%')
         ->public();
