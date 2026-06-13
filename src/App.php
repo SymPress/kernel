@@ -11,7 +11,15 @@ use SymPress\Kernel\Kernel\SiteKernel;
 
 final class App
 {
+    public const string ACTION_BEFORE_CONTAINER_BUILD = 'kernel.before_container_build';
+    public const string ACTION_BOOTED = 'kernel.booted';
+    public const string ACTION_BOOTING = 'kernel.booting';
+    public const string ACTION_CONTAINER_CONFIGURED = 'kernel.container_configured';
+    public const string ACTION_CONTAINER_READY = 'kernel.container_ready';
     public const string ACTION_ERROR = 'kernel.error';
+    public const string LEGACY_ACTION_BEFORE_CONTAINER_BUILD = 'symfony_before_container_build';
+    public const string LEGACY_ACTION_CONTAINER_LOADED = 'symfony_container_loaded';
+    public const string LEGACY_ACTION_CONTAINER_READY = 'symfony_container_ready';
 
     private static ?self $app = null;
 
@@ -101,14 +109,23 @@ final class App
             }
 
             $this->booting = true;
+            self::dispatchAction(self::ACTION_BOOTING, $this->kernel);
             $this->initializeContainer();
             $this->bundles = $this->kernel->discoverBundles();
 
             if (!$this->kernel->tryUseRuntimeContainer($this->container, $this->bundles)) {
+                self::dispatchAction(self::ACTION_BEFORE_CONTAINER_BUILD, $this->container, $this->bundles);
+                self::dispatchAction(self::LEGACY_ACTION_BEFORE_CONTAINER_BUILD);
                 $loadedConfigFiles = $this->kernel->configureContainer(
                     $this->container->builder(),
                     $this->container,
                     $this->bundles,
+                );
+                self::dispatchAction(
+                    self::ACTION_CONTAINER_CONFIGURED,
+                    $this->container,
+                    $this->bundles,
+                    $loadedConfigFiles,
                 );
                 $this->kernel->createRuntimeContainer(
                     $this->container,
@@ -117,10 +134,14 @@ final class App
                 );
             }
 
+            self::dispatchAction(self::ACTION_CONTAINER_READY, $this->container, $this->bundles);
+            self::dispatchAction(self::LEGACY_ACTION_CONTAINER_READY, $this->container);
             $this->registerHooks();
             $this->kernel->boot($this->container, $this->bundles);
             $this->booted = true;
             $this->booting = false;
+            self::dispatchAction(self::ACTION_BOOTED, $this->container, $this->bundles);
+            self::dispatchAction(self::LEGACY_ACTION_CONTAINER_LOADED, $this->container);
         } catch (\Throwable $throwable) {
             $this->booted = false;
             $this->booting = false;
@@ -219,5 +240,14 @@ final class App
         $metadata = json_decode($contents, true);
 
         return is_array($metadata) && ($metadata['type'] ?? null) === 'project';
+    }
+
+    private static function dispatchAction(string $action, mixed ...$arguments): void
+    {
+        if (!function_exists('do_action')) {
+            return;
+        }
+
+        do_action($action, ...$arguments);
     }
 }
