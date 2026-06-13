@@ -14,7 +14,7 @@ ddev wp plugin activate kernel-showcase
 
 ## What the Plugin Demonstrates
 
-- resource-based loading from `config/services.yaml`
+- resource-based loading from `Resources/config/services.yaml`
 - constructor injection through autowiring
 - `#[Autowire(param: ...)]`
 - `#[Required]`
