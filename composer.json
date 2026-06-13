@@ -46,23 +46,18 @@
     "scripts": {
         "cs": [
             "Composer\\Config::disableProcessTimeout",
-            "@php bin/package-quality.php cs"
+            "phpcs --standard=phpcs.xml.dist"
         ],
         "cs:fix": [
             "Composer\\Config::disableProcessTimeout",
-            "@php bin/package-quality.php cs:fix"
-        ],
-        "static-analysis": [
-            "Composer\\Config::disableProcessTimeout",
-            "@php bin/package-quality.php static-analysis"
+            "phpcbf --standard=phpcs.xml.dist"
         ],
         "tests": [
             "Composer\\Config::disableProcessTimeout",
-            "@php bin/package-quality.php tests"
+            "phpunit --configuration phpunit.xml.dist --no-coverage"
         ],
         "qa": [
             "@cs",
-            "@static-analysis",
             "@tests"
         ]
     },
