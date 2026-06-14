@@ -1,5 +1,7 @@
 # SymPress Kernel
 
+[![Checks](https://img.shields.io/github/actions/workflow/status/SymPress/kernel/qa.yml?branch=main&label=checks)](https://github.com/SymPress/kernel/actions/workflows/qa.yml) [![Release](https://img.shields.io/packagist/v/sympress/kernel.svg?label=release)](https://packagist.org/packages/sympress/kernel) [![PHP](https://img.shields.io/packagist/dependency-v/sympress/kernel/php.svg?label=php)](https://packagist.org/packages/sympress/kernel) [![Downloads](https://img.shields.io/packagist/dt/sympress/kernel.svg?label=downloads)](https://packagist.org/packages/sympress/kernel/stats) [![License: GPL-2.0-or-later](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](LICENSE)
+
 `sympress/kernel` is the foundation package for SymPress. It gives WordPress
 projects one Symfony-powered application kernel, one shared dependency injection
 container, and a predictable way for Composer packages, plugins, MU plugins, and
