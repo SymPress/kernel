@@ -1,0 +1,14 @@
+{
+    "name": "sympress/route-bundle",
+    "type": "wordpress-plugin",
+    "autoload": {
+        "psr-4": {
+            "SymPress\\Kernel\\Tests\\Fixtures\\RouteBundle\\Src\\": "src/"
+        }
+    },
+    "extra": {
+        "sympress": {
+            "bundle": "SymPress\\Kernel\\Tests\\Fixtures\\RouteBundle\\RouteBundle"
+        }
+    }
+}

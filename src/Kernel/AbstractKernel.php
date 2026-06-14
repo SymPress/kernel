@@ -7,19 +7,24 @@ namespace SymPress\Kernel\Kernel;
 use Psr\Container\ContainerInterface as PsrContainerInterface;
 use SymPress\Kernel\App;
 use SymPress\Kernel\Attribute\AsHook;
+use SymPress\Kernel\Attribute\Route;
 use SymPress\Kernel\Bundle\BundleInterface;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Console\ConsoleApplicationFactory;
 use SymPress\Kernel\Console\WpCliConsoleBridge;
 use SymPress\Kernel\Container;
+use SymPress\Kernel\DependencyInjection\EnvironmentParameterLoader;
 use SymPress\Kernel\Discovery\BundleDiscovery;
 use SymPress\Kernel\EnvConfig;
 use SymPress\Kernel\Hook\HookCompilerPass;
 use SymPress\Kernel\Hook\HookLoader;
 use SymPress\Kernel\Resolver\ActivePackageResolver;
+use SymPress\Kernel\Routing\RouteCompilerPass;
+use SymPress\Kernel\Routing\RouteLoader;
 use SymPress\Kernel\SiteConfig;
 use SymPress\Kernel\Translation\TranslationLoader;
 use SymPress\Kernel\WpContext;
+use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\Config\Resource\FileResource;
 use Symfony\Component\Config\Resource\SelfCheckingResourceChecker;
 use Symfony\Component\Config\ResourceCheckerConfigCacheFactory;
@@ -265,13 +270,27 @@ abstract class AbstractKernel implements KernelInterface
         int $type = HttpKernelInterface::MAIN_REQUEST,
         bool $catch = true,
     ): Response {
-        $httpKernel = $this->getContainer()->get('http_kernel');
+        $container = $this->getContainer();
 
-        if (!$httpKernel instanceof HttpKernelInterface) {
-            throw new \LogicException('The "http_kernel" service is not available.');
+        if ($container->has('http_kernel')) {
+            $httpKernel = $container->get('http_kernel');
+
+            if (!$httpKernel instanceof HttpKernelInterface) {
+                throw new \LogicException('The "http_kernel" service is not available.');
+            }
+
+            return $httpKernel->handle($request, $type, $catch);
         }
 
-        return $httpKernel->handle($request, $type, $catch);
+        if ($container->has(RouteLoader::class)) {
+            $routeLoader = $container->get(RouteLoader::class);
+
+            if ($routeLoader instanceof RouteLoader) {
+                return $routeLoader->handle($request) ?? new Response('', Response::HTTP_NOT_FOUND);
+            }
+        }
+
+        return new Response('', Response::HTTP_NOT_FOUND);
     }
 
     public function locateResource(string $name): string
@@ -437,8 +456,6 @@ abstract class AbstractKernel implements KernelInterface
         $metaFile = sprintf('%s/meta.php', $cacheDir);
         $lockFile = sprintf('%s/container.lock', $cacheDir);
         $fingerprint = $this->fingerprint($bundles, $configFiles);
-        $cacheKey = substr(hash('sha256', $fingerprint), 0, 16);
-        $containerFile = sprintf('%s/container_%s.php', $cacheDir, $cacheKey);
         $lock = fopen($lockFile, 'c+');
 
         if (!is_resource($lock)) {
@@ -450,7 +467,6 @@ abstract class AbstractKernel implements KernelInterface
                 throw new \RuntimeException(sprintf('Unable to lock cache file "%s".', $lockFile));
             }
 
-            clearstatcache(true, $containerFile);
             clearstatcache(true, $metaFile);
 
             $metadata = is_file($metaFile) ? require $metaFile : null;
@@ -462,9 +478,16 @@ abstract class AbstractKernel implements KernelInterface
                 return;
             }
 
+            $sourceResources = $this->sourceResourceManifest($bundles);
+            $sourceFingerprint = $this->sourceResourceFingerprint($sourceResources);
+            $cacheKey = substr(hash('sha256', "{$fingerprint}|{$sourceFingerprint}"), 0, 16);
+            $containerFile = sprintf('%s/container_%s.php', $cacheDir, $cacheKey);
+            clearstatcache(true, $containerFile);
+
             $class = sprintf('KernelContainer_%s', $cacheKey);
             $runtime = $this->createRuntimeBuilder($container, $class);
             $runtime->compile(true);
+            $configResources = $this->configResourceManifest($runtime, $configFiles);
             $dumper = new PhpDumper($runtime);
             $filesystem->dumpFile(
                 $containerFile,
@@ -484,9 +507,12 @@ abstract class AbstractKernel implements KernelInterface
                     "<?php\n\nreturn %s;\n",
                     var_export(
                         [
-                            'fingerprint' => $fingerprint,
-                            'class'       => $class,
-                            'file'        => basename($containerFile),
+                            'fingerprint'        => $fingerprint,
+                            'config_resources'   => $configResources,
+                            'source_fingerprint' => $sourceFingerprint,
+                            'source_resources'   => $sourceResources,
+                            'class'              => $class,
+                            'file'               => basename($containerFile),
                         ],
                         true,
                     ),
@@ -884,60 +910,11 @@ abstract class AbstractKernel implements KernelInterface
 
     private function loadEnvironmentVariablesAsParameters(ContainerBuilder $builder): void
     {
-        $environment = array_merge($_SERVER, $_ENV);
-        $excludedPrefixes = ['DOCUMENT_', 'HTTP_', 'PHP_', 'REDIRECT_', 'REQUEST_', 'SCRIPT_'];
-        $allowedPrefixes = ['APP_', 'DB_', 'WORDPRESS_', 'WP_'];
-
-        foreach ($environment as $name => $value) {
-            $name = (string) $name;
-
-            if (!$this->shouldExposeEnvironmentParameter($name, $excludedPrefixes, $allowedPrefixes)) {
-                continue;
-            }
-
-            if (!is_bool($value) && !is_numeric($value) && !is_string($value)) {
-                continue;
-            }
-
-            $builder->setParameter(
-                sprintf('env.%s', strtolower($name)),
-                $this->sanitizeEnvironmentParameter($value),
-            );
-        }
-    }
-
-    /**
-     * @param list<string> $excludedPrefixes
-     * @param list<string> $allowedPrefixes
-     */
-    private function shouldExposeEnvironmentParameter(
-        string $name,
-        array $excludedPrefixes,
-        array $allowedPrefixes,
-    ): bool {
-
-        foreach ($excludedPrefixes as $prefix) {
-            if (str_starts_with($name, $prefix)) {
-                return false;
-            }
-        }
-
-        foreach ($allowedPrefixes as $prefix) {
-            if (str_starts_with($name, $prefix)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function sanitizeEnvironmentParameter(bool|float|int|string $value): bool|float|int|string
-    {
-        if (!is_string($value)) {
-            return $value;
-        }
-
-        return str_replace('%', '%%', $value);
+        (new EnvironmentParameterLoader())->load(
+            $builder,
+            array_merge($_SERVER, $_ENV),
+            $this->config->get('KERNEL_ENV_PARAMETERS', null),
+        );
     }
 
     /** @param array<int, string> $configFiles */
@@ -951,7 +928,7 @@ abstract class AbstractKernel implements KernelInterface
             (string) (int) $this->debug,
             $this->deploymentFingerprint(),
             $this->kernelFingerprint(),
-            ...$bundles->fingerprintParts($this->tracksSourceChanges()),
+            ...$bundles->identityFingerprintParts(),
         ];
 
         foreach ($configFiles as $file) {
@@ -976,6 +953,7 @@ abstract class AbstractKernel implements KernelInterface
             new MergeExtensionConfigurationPass($this->registeredExtensionAliases($runtime)),
         );
         $runtime->addCompilerPass(new HookCompilerPass());
+        $runtime->addCompilerPass(new RouteCompilerPass());
         $runtime->addCompilerPass(new AddConsoleCommandPass());
         $this->ensureSynthetic($runtime, Container::CONTAINER_ID, Container::class);
         $this->ensureSynthetic($runtime, Container::CONFIG_ID, SiteConfig::class);
@@ -1040,6 +1018,17 @@ abstract class AbstractKernel implements KernelInterface
             return false;
         }
 
+        if (!$this->configResourcesAreFresh($metadata['config_resources'] ?? null)) {
+            return false;
+        }
+
+        if (
+            $this->shouldValidateCachedSourceResources()
+            && !$this->sourceResourcesAreFresh($metadata['source_resources'] ?? null)
+        ) {
+            return false;
+        }
+
         $cachedContainerFile = sprintf('%s/%s', $cacheDir, basename($metadata['file']));
 
         if (!is_file($cachedContainerFile)) {
@@ -1060,16 +1049,18 @@ abstract class AbstractKernel implements KernelInterface
 
     private function kernelFingerprint(): string
     {
-        if ($this->tracksSourceChanges()) {
-            return $this->kernelSourceFingerprint();
-        }
+        $packageDir = dirname(__DIR__, 2);
+        $composerFile = sprintf('%s/composer.json', $packageDir);
 
-        $kernelFile = __FILE__;
-
-        return sprintf(
-            '%s:%s',
-            $kernelFile,
-            is_file($kernelFile) ? (string) filemtime($kernelFile) : 'missing',
+        return hash(
+            'sha256',
+            implode(
+                '|',
+                [
+                    $packageDir,
+                    sprintf('%s:%s', $composerFile, $this->fileFingerprint($composerFile)),
+                ],
+            ),
         );
     }
 
@@ -1097,11 +1088,15 @@ abstract class AbstractKernel implements KernelInterface
 
     private function fileFingerprint(string $file): string
     {
+        if (!is_file($file)) {
+            return 'missing';
+        }
+
         if ($this->tracksSourceChanges()) {
             return sha1_file($file);
         }
 
-        return (string) filemtime($file);
+        return $this->sourceFileMtime($file);
     }
 
     private function deploymentFingerprint(): string
@@ -1146,31 +1141,204 @@ abstract class AbstractKernel implements KernelInterface
         return time();
     }
 
-    private function kernelSourceFingerprint(): string
+    /** @return array<string, string> */
+    private function sourceResourceManifest(BundleRegistry $bundles): array
     {
-        $sourceDir = dirname(__DIR__, 2) . '/src';
-        $files = [];
+        $resources = [];
+        $this->collectSourceResources(dirname(__DIR__, 2) . '/src', $resources);
 
-        if (!is_dir($sourceDir)) {
-            return 'missing';
-        }
+        foreach ($bundles->all() as $metadata) {
+            $this->collectSourceResources(sprintf('%s/src', rtrim($metadata->path(), '/')), $resources, 'php');
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($sourceDir, \FilesystemIterator::SKIP_DOTS),
-        );
+            $bundleFile = (new \ReflectionObject($metadata->bundle()))->getFileName();
 
-        foreach ($iterator as $file) {
-            if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+            if (!is_string($bundleFile)) {
                 continue;
             }
 
-            $pathname = $file->getPathname();
-            $files[] = sprintf('%s:%s', $pathname, sha1_file($pathname));
+            $resources[$bundleFile] = $this->sourceFileMtime($bundleFile);
         }
 
-        sort($files);
+        ksort($resources);
 
-        return hash('sha256', implode('|', $files));
+        return $resources;
+    }
+
+    /**
+     * @param array<string, string> $resources
+     */
+    private function collectSourceResources(
+        string $directory,
+        array &$resources,
+        ?string $fileExtension = null,
+    ): void {
+
+        if (!is_dir($directory)) {
+            return;
+        }
+
+        $resources[$directory] = $this->sourceDirectoryMtime($directory);
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST,
+        );
+
+        foreach ($iterator as $resource) {
+            if (!$resource instanceof \SplFileInfo) {
+                continue;
+            }
+
+            $pathname = $resource->getPathname();
+
+            if ($resource->isDir()) {
+                $resources[$pathname] = $this->sourceDirectoryMtime($pathname);
+
+                continue;
+            }
+
+            if (!$resource->isFile()) {
+                continue;
+            }
+
+            if ($fileExtension !== null && $resource->getExtension() !== $fileExtension) {
+                continue;
+            }
+
+            $resources[$pathname] = $this->sourceFileMtime($pathname);
+        }
+    }
+
+    private function sourceResourcesAreFresh(mixed $resources): bool
+    {
+        if (!is_array($resources) || $resources === []) {
+            return false;
+        }
+
+        foreach ($resources as $path => $expected) {
+            if (!is_string($path) || !is_string($expected)) {
+                return false;
+            }
+
+            $actual = str_starts_with($expected, 'dir:')
+                ? $this->sourceDirectoryMtime($path)
+                : $this->sourceFileMtime($path);
+
+            if ($actual !== $expected) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<int, string> $configFiles
+     * @return array<string, string>
+     */
+    private function configResourceManifest(ContainerBuilder $builder, array $configFiles): array
+    {
+        $resources = [];
+
+        foreach ($configFiles as $file) {
+            if ($file === '') {
+                continue;
+            }
+
+            $resources[$file] = $this->fileFingerprint($file);
+        }
+
+        foreach ($builder->getResources() as $resource) {
+            if ($resource instanceof FileResource) {
+                $file = $resource->getResource();
+                $resources[$file] = $this->fileFingerprint($file);
+
+                continue;
+            }
+
+            if (!$resource instanceof FileExistenceResource) {
+                continue;
+            }
+
+            $file = $resource->getResource();
+            $resources[sprintf('exists:%s', $file)] = file_exists($file) ? 'exists:1' : 'exists:0';
+        }
+
+        ksort($resources);
+
+        return $resources;
+    }
+
+    private function configResourcesAreFresh(mixed $resources): bool
+    {
+        if (!is_array($resources) || $resources === []) {
+            return false;
+        }
+
+        foreach ($resources as $path => $expected) {
+            if (!is_string($path) || !is_string($expected)) {
+                return false;
+            }
+
+            if (str_starts_with($path, 'exists:')) {
+                $actual = file_exists(substr($path, 7)) ? 'exists:1' : 'exists:0';
+
+                if ($actual !== $expected) {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if ($this->fileFingerprint($path) !== $expected) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function shouldValidateCachedSourceResources(): bool
+    {
+        $value = $_SERVER['SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES']
+            ?? $_ENV['SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES']
+            ?? null;
+
+        if ($value === null) {
+            return false;
+        }
+
+        return filter_var($value, \FILTER_VALIDATE_BOOL, \FILTER_NULL_ON_FAILURE) === true;
+    }
+
+    /** @param array<string, string> $resources */
+    private function sourceResourceFingerprint(array $resources): string
+    {
+        ksort($resources);
+        $parts = [];
+
+        foreach ($resources as $path => $fingerprint) {
+            $parts[] = sprintf('%s:%s', $path, $fingerprint);
+        }
+
+        return hash('sha256', implode('|', $parts));
+    }
+
+    private function sourceDirectoryMtime(string $directory): string
+    {
+        if (!is_dir($directory)) {
+            return 'missing';
+        }
+
+        return sprintf('dir:%s', (string) filemtime($directory));
+    }
+
+    private function sourceFileMtime(string $file): string
+    {
+        if (!is_file($file)) {
+            return 'missing';
+        }
+
+        return sprintf('file:%s:%s', (string) filemtime($file), (string) filesize($file));
     }
 
     private function prepareBuilder(ContainerBuilder $builder): void
@@ -1185,6 +1353,7 @@ abstract class AbstractKernel implements KernelInterface
         $this->registerCoreContainerServices($builder);
         $this->registerTranslationLoader($builder);
         $this->registerHookLoader($builder);
+        $this->registerRouteLoader($builder);
         $this->registerConsoleApplication($builder);
         $this->registerConsoleAttributes($builder);
         $builder->registerAttributeForAutoconfiguration(
@@ -1203,7 +1372,9 @@ abstract class AbstractKernel implements KernelInterface
                 $definition->addTag(HookLoader::TAG, $tag);
             },
         );
+        $this->registerRouteAttributes($builder);
         $builder->addCompilerPass(new HookCompilerPass());
+        $builder->addCompilerPass(new RouteCompilerPass());
         $this->build($builder);
     }
 
@@ -1626,6 +1797,56 @@ abstract class AbstractKernel implements KernelInterface
                 ->setPublic(true)
                 ->setArguments([null, []]),
         );
+    }
+
+    private function registerRouteLoader(ContainerBuilder $builder): void
+    {
+        if ($builder->hasDefinition(RouteLoader::class)) {
+            return;
+        }
+
+        $builder->setDefinition(
+            RouteLoader::class,
+            (new Definition(RouteLoader::class))
+                ->setPublic(true)
+                ->setArguments([null, [], []])
+                ->addTag(
+                    HookLoader::TAG,
+                    [
+                        'hook'     => 'template_redirect',
+                        'method'   => 'dispatchFrontendRequest',
+                        'priority' => 0,
+                    ],
+                )
+                ->addTag(
+                    HookLoader::TAG,
+                    [
+                        'hook'   => 'rest_api_init',
+                        'method' => 'registerRestRoutes',
+                    ],
+                ),
+        );
+    }
+
+    private function registerRouteAttributes(ContainerBuilder $builder): void
+    {
+        foreach (
+            [
+                Route::class,
+                'Symfony\Component\Routing\Attribute\Route',
+            ] as $attributeClass
+        ) {
+            if (!class_exists($attributeClass)) {
+                continue;
+            }
+
+            $builder->registerAttributeForAutoconfiguration(
+                $attributeClass,
+                static function (ChildDefinition $definition): void {
+                    $definition->addTag(RouteLoader::TAG);
+                },
+            );
+        }
     }
 
     private function ensureSynthetic(ContainerBuilder $builder, string $id, string $class): void

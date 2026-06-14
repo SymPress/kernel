@@ -50,7 +50,13 @@ namespace SymPress\Kernel\Tests\Kernel {
         protected function tearDown(): void
         {
             unset(
+                $_ENV['APP_API_KEY'],
                 $_ENV['APP_KERNEL_TEST_VALUE'],
+                $_ENV['APP_RUNTIME_MODE'],
+                $_ENV['APP_SECRET'],
+                $_ENV['DB_PASSWORD'],
+                $_ENV['WP_AUTH_KEY'],
+                $_SERVER['SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES'],
                 $GLOBALS['kernel_test_do_actions'],
                 $GLOBALS['kernel_test_filter_values'],
             );
@@ -163,9 +169,38 @@ namespace SymPress\Kernel\Tests\Kernel {
             );
         }
 
-        public function testEnvironmentVariablesAreExposedAsParameters(): void
+        public function testKernelBootRethrowsErrorsAfterDispatchingErrorAction(): void
         {
-            $_ENV['APP_KERNEL_TEST_VALUE'] = 'value%with-percent';
+            $kernel = new class (
+                $this->tmpPath('failing-project'),
+                'test',
+                false,
+                new TestSiteConfig('test'),
+                WpContext::new()->force(WpContext::CORE),
+            ) extends AbstractKernel {
+                public function discoverBundles(): BundleRegistry
+                {
+                    throw new \RuntimeException('discovery failed');
+                }
+            };
+
+            try {
+                App::new($kernel)->boot();
+                self::fail('Kernel boot should rethrow discovery failures.');
+            } catch (\RuntimeException $exception) {
+                self::assertSame('discovery failed', $exception->getMessage());
+                self::assertArrayHasKey(App::ACTION_ERROR, $GLOBALS['kernel_test_do_actions']);
+                self::assertSame($exception, $GLOBALS['kernel_test_do_actions'][App::ACTION_ERROR][0][0]);
+            }
+        }
+
+        public function testOnlyAllowedNonSensitiveEnvironmentVariablesAreExposedAsParameters(): void
+        {
+            $_ENV['APP_RUNTIME_MODE'] = 'web%mode';
+            $_ENV['APP_SECRET'] = 'secret';
+            $_ENV['APP_API_KEY'] = 'secret';
+            $_ENV['DB_PASSWORD'] = 'secret';
+            $_ENV['WP_AUTH_KEY'] = 'secret';
 
             $kernel = $this->kernel($this->tmpPath('env-project'));
             $container = $kernel->createContainer();
@@ -173,9 +208,113 @@ namespace SymPress\Kernel\Tests\Kernel {
             $kernel->configureContainer($container->builder(), $container, new BundleRegistry());
 
             self::assertSame(
-                'value%%with-percent',
-                $container->builder()->getParameter('env.app_kernel_test_value'),
+                'web%%mode',
+                $container->builder()->getParameter('env.app_runtime_mode'),
             );
+            self::assertFalse($container->builder()->hasParameter('env.app_secret'));
+            self::assertFalse($container->builder()->hasParameter('env.app_api_key'));
+            self::assertFalse($container->builder()->hasParameter('env.db_password'));
+            self::assertFalse($container->builder()->hasParameter('env.wp_auth_key'));
+        }
+
+        public function testProductionBundleFingerprintChangesWhenSourceFileChanges(): void
+        {
+            $bundleDir = $this->tmpPath('fingerprint-bundle');
+            $sourceDir = "{$bundleDir}/src";
+            $sourceFile = "{$sourceDir}/DemoService.php";
+            mkdir($sourceDir, 0777, true);
+            file_put_contents("{$bundleDir}/composer.json", '{}');
+            file_put_contents($sourceFile, '<?php final class DemoService {}');
+
+            $metadata = $this->registry($bundleDir)->all()[0];
+            $first = $metadata->fingerprintParts(false);
+
+            file_put_contents($sourceFile, '<?php final class DemoService { public function touch(): void {} }');
+            touch($sourceFile, time() + 5);
+            clearstatcache(true, $sourceFile);
+
+            self::assertNotSame($first, $metadata->fingerprintParts(false));
+        }
+
+        public function testProductionRuntimeCacheDoesNotStatBundleSourceFilesByDefault(): void
+        {
+            $projectDir = $this->tmpPath('runtime-cache-project');
+            $bundleDir = $this->tmpPath('runtime-cache-bundle');
+            $sourceDir = "{$bundleDir}/src";
+            $sourceFile = "{$sourceDir}/DemoService.php";
+            mkdir($sourceDir, 0777, true);
+            file_put_contents("{$bundleDir}/composer.json", '{}');
+            file_put_contents($sourceFile, '<?php final class DemoService {}');
+
+            $registry = $this->registry($bundleDir);
+            $kernel = $this->kernel($projectDir);
+            $container = $kernel->createContainer();
+            $loaded = $kernel->configureContainer($container->builder(), $container, $registry);
+            $kernel->createRuntimeContainer($container, $registry, $loaded);
+
+            $cachedKernel = $this->kernel($projectDir);
+            $cachedContainer = $cachedKernel->createContainer();
+            self::assertTrue($cachedKernel->tryUseRuntimeContainer($cachedContainer, $registry));
+
+            file_put_contents($sourceFile, '<?php final class DemoService { public function touch(): void {} }');
+            touch($sourceFile, time() + 5);
+            clearstatcache(true, $sourceFile);
+
+            $staleKernel = $this->kernel($projectDir);
+            $staleContainer = $staleKernel->createContainer();
+            self::assertTrue($staleKernel->tryUseRuntimeContainer($staleContainer, $registry));
+        }
+
+        public function testRuntimeCacheCanValidateBundleSourceFilesWhenEnabled(): void
+        {
+            $_SERVER['SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES'] = '1';
+            $projectDir = $this->tmpPath('runtime-source-validation-project');
+            $bundleDir = $this->tmpPath('runtime-source-validation-bundle');
+            $sourceDir = "{$bundleDir}/src";
+            $sourceFile = "{$sourceDir}/DemoService.php";
+            mkdir($sourceDir, 0777, true);
+            file_put_contents("{$bundleDir}/composer.json", '{}');
+            file_put_contents($sourceFile, '<?php final class DemoService {}');
+
+            $registry = $this->registry($bundleDir);
+            $kernel = $this->kernel($projectDir);
+            $container = $kernel->createContainer();
+            $loaded = $kernel->configureContainer($container->builder(), $container, $registry);
+            $kernel->createRuntimeContainer($container, $registry, $loaded);
+
+            file_put_contents($sourceFile, '<?php final class DemoService { public function touch(): void {} }');
+            touch($sourceFile, time() + 5);
+            clearstatcache(true, $sourceFile);
+
+            $staleKernel = $this->kernel($projectDir);
+            $staleContainer = $staleKernel->createContainer();
+            self::assertFalse($staleKernel->tryUseRuntimeContainer($staleContainer, $registry));
+        }
+
+        public function testRuntimeCacheInvalidatesWhenImportedConfigFileChanges(): void
+        {
+            $projectDir = $this->tmpPath('runtime-import-project');
+            $configDir = "{$projectDir}/config";
+            $importedFile = "{$configDir}/imported.php";
+            mkdir($configDir, 0777, true);
+            $this->writeImportingConfig("{$configDir}/services.php", 'first');
+
+            $kernel = $this->kernel($projectDir);
+            $container = $kernel->createContainer();
+            $loaded = $kernel->configureContainer($container->builder(), $container, new BundleRegistry());
+            $kernel->createRuntimeContainer($container, new BundleRegistry(), $loaded);
+
+            $cachedKernel = $this->kernel($projectDir);
+            $cachedContainer = $cachedKernel->createContainer();
+            self::assertTrue($cachedKernel->tryUseRuntimeContainer($cachedContainer, new BundleRegistry()));
+
+            $this->writeImportedConfig($importedFile, 'second');
+            touch($importedFile, time() + 5);
+            clearstatcache(true, $importedFile);
+
+            $staleKernel = $this->kernel($projectDir);
+            $staleContainer = $staleKernel->createContainer();
+            self::assertFalse($staleKernel->tryUseRuntimeContainer($staleContainer, new BundleRegistry()));
         }
 
         public function testTranslationLoaderReceivesBundleTranslationPaths(): void
@@ -352,6 +491,48 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 
 return static function (ContainerConfigurator $container): void {
     $container->parameters()->set('demo.value', '%s');
+};
+PHP
+                    ,
+                    $value,
+                ),
+            );
+        }
+
+        private function writeImportingConfig(string $file, string $value): void
+        {
+            $this->writeImportedConfig(sprintf('%s/imported.php', dirname($file)), $value);
+            file_put_contents(
+                $file,
+                <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+
+return static function (ContainerConfigurator $container): void {
+    $container->import('imported.php');
+};
+PHP
+                ,
+            );
+        }
+
+        private function writeImportedConfig(string $file, string $value): void
+        {
+            file_put_contents(
+                $file,
+                sprintf(
+                    <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+
+return static function (ContainerConfigurator $container): void {
+    $container->parameters()->set('imported.value', '%s');
 };
 PHP
                     ,

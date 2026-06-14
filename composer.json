@@ -26,6 +26,7 @@
         "symfony/filesystem": "^8.0",
         "symfony/http-foundation": "^8.1",
         "symfony/http-kernel": "^8.1",
+        "symfony/routing": "^8.0",
         "symfony/service-contracts": "^3.6",
         "symfony/yaml": "^8.0"
     },
@@ -42,7 +43,13 @@
         "psr-4": {
             "SymPress\\Kernel\\Tests\\": "tests/",
             "SymPress\\Kernel\\Tests\\Fixtures\\AttributeBundle\\Src\\": "tests/Fixtures/AttributeBundle/src/",
-            "SymPress\\Kernel\\Tests\\Fixtures\\HookBundle\\Src\\": "tests/Fixtures/HookBundle/src/"
+            "SymPress\\Kernel\\Tests\\Fixtures\\HookBundle\\Src\\": "tests/Fixtures/HookBundle/src/",
+            "SymPress\\Kernel\\Tests\\Fixtures\\RouteBundle\\Src\\": "tests/Fixtures/RouteBundle/src/"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "1.0.x-dev"
         }
     },
     "scripts": {

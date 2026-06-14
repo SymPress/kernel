@@ -46,6 +46,7 @@
                 <element key="SymPress\Kernel\Tests" value="tests" />
                 <element key="SymPress\Kernel\Tests\Fixtures\AttributeBundle\Src" value="tests/Fixtures/AttributeBundle/src" />
                 <element key="SymPress\Kernel\Tests\Fixtures\HookBundle\Src" value="tests/Fixtures/HookBundle/src" />
+                <element key="SymPress\Kernel\Tests\Fixtures\RouteBundle\Src" value="tests/Fixtures/RouteBundle/src" />
             </property>
             <property name="exclude" type="array">
                 <element value="SymPress\Kernel\Tests\Hook\TestHook" />
