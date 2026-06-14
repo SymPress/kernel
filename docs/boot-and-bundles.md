@@ -45,6 +45,11 @@ Composer discovery can be narrowed through the root `composer.json`:
 }
 ```
 
+The kernel caches the matching Composer package manifest below
+`var/cache/<environment>/kernel`. Cache hits reuse the manifest instead of
+walking the full Composer installation, and the manifest is rebuilt when root or
+installed Composer metadata changes.
+
 For migration-heavy projects, `config/bundles.php` is also supported:
 
 ```php

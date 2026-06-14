@@ -37,8 +37,9 @@ Then it adds the Symfony patterns that pay off in larger codebases:
 - PHP `>=8.4.1`
 - Composer
 - WordPress
-- Symfony DependencyInjection `^8.1`, Config, Console, Filesystem, Service
-  Contracts, EventDispatcher, Clock, ExpressionLanguage, and Yaml components
+- Symfony DependencyInjection `^8.1`, Config, Console, Filesystem, Routing,
+  Service Contracts, EventDispatcher, Clock, ExpressionLanguage, and Yaml
+  components
 
 ## Installation
 
@@ -186,9 +187,18 @@ glob, directory, and closure loaders. The kernel file locator also understands
 Symfony-style bundle resources such as `@ProjectPlugin/Resources/config/foo.yaml`.
 
 The compiled container is cached under `var/cache/{environment}/kernel`.
-In debug mode, source and config contents are fingerprinted more strictly. In
-production, cache invalidation follows file mtimes, `composer.lock`, or the
-optional `SYMPRESS_KERNEL_BUILD_ID` value.
+Production requests use the deployment fingerprint as the normal cache
+invalidation boundary and do not stat every bundle source file before each cache
+hit. Imported configuration resources are still validated so service wiring
+changes invalidate the runtime container. Deployment rollovers can use
+`SYMPRESS_KERNEL_BUILD_ID` to force a new cache identity, and
+`SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES=1` opts back into source-level
+freshness checks when the request-time filesystem cost is acceptable.
+
+Bundle discovery also stores the matching Composer package manifest under the
+kernel cache directory. The manifest is invalidated when Composer metadata such
+as `composer.json`, `composer.lock`, or `vendor/composer/installed.php` changes,
+so normal cache hits do not need to scan all installed packages.
 
 ## Extension Points
 
@@ -210,6 +220,9 @@ Use these points before adding work to plugin boot files:
   as a compatibility fallback.
 - Use the `kernel.hook` service tag or `#[AsHook]` attribute for WordPress
   actions and filters.
+- Use `#[Route]` on controller services for Symfony-style frontend routes and
+  WordPress REST routes. A route with `format: 'json'` is registered through
+  WordPress as a REST endpoint; other routes are matched as frontend routes.
 - Use Symfony's `#[AsCommand]` attribute to expose console commands through the
   kernel console integration.
 - Use Symfony DI attributes from the component directly, including
@@ -224,6 +237,24 @@ Use these points before adding work to plugin boot files:
   `SymPress\Kernel\SiteConfig`, `SymPress\Kernel\WpContext`,
   `SymPress\Kernel\Kernel\KernelInterface`, and `SymPress\Kernel\App` when a
   service needs runtime context.
+
+## Package Manager
+
+The package manager is an optional WordPress admin screen for inspecting kernel
+packages discovered from Composer metadata and running package lifecycle actions
+from the backend.
+
+It is disabled by default because it can activate, deactivate, and delete
+Composer-backed WordPress packages. Enable it deliberately in site
+configuration only when that operational surface belongs in the install:
+
+```php
+$container->parameters()->set('kernel.package_manager.enabled', true);
+```
+
+The manager respects WordPress file-modification policy and hides package
+actions when `wp_is_file_mod_allowed()` or `DISALLOW_FILE_MODS` blocks them.
+Direct symlink deletion is limited to the expected managed plugin or theme path.
 
 ## Core Services
 
@@ -274,9 +305,11 @@ wp console container:dump --format=yaml
 More focused docs live in `docs/`:
 
 - `docs/boot-and-bundles.md`
+- `docs/dependency-injection.md`
 - `docs/services-and-autowiring.md`
 - `docs/attributes.md`
 - `docs/hooks.md`
+- `docs/routing.md`
 - `docs/showcase-plugin.md`
 
 ## Development

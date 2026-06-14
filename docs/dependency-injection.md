@@ -1,14 +1,14 @@
 # Dependency Injection Kernel
 
-Diese Dokumentation beschreibt den `sympress/kernel` als WordPress-Kernel auf
-Basis von `symfony/dependency-injection`. Sie orientiert sich an der Symfony
-Component-Dokumentation und ordnet die Learn-More-Themen auf die konkrete
-Kernel-Implementierung dieses Repositories ein.
+This document describes `sympress/kernel` as a WordPress kernel built on
+`symfony/dependency-injection`. It follows the Symfony component model and maps
+the service-container topics from Symfony's documentation to the concrete kernel
+implementation in this repository.
 
 ## Installation
 
-Der Kernel ist ein Composer-Paket und benoetigt die Symfony-Komponenten, die er
-zur Container-Erzeugung und Konfiguration verwendet:
+The kernel is a Composer package. It depends on the Symfony components used to
+build, configure, dump, and run the container:
 
 ```json
 {
@@ -26,9 +26,10 @@ zur Container-Erzeugung und Konfiguration verwendet:
 }
 ```
 
-Im Projekt wird `sympress/kernel` ueber Composer eingebunden und ueber den
-WordPress-MU-Bootstrap gestartet. Der Kernel erzeugt genau einen globalen
-Site-Container fuer aktive MU-Plugins, Plugins, Themes und Site-Konfiguration.
+In a WordPress project, `sympress/kernel` is installed through Composer and
+booted from an MU plugin or another early bootstrap file. The kernel builds one
+global site container for active MU plugins, plugins, themes, libraries, and
+site-level configuration.
 
 ```php
 <?php
@@ -41,47 +42,45 @@ use SymPress\Kernel\Kernel\SiteKernel;
 App::bootKernel(new SiteKernel(dirname(__DIR__, 2)));
 ```
 
-## Grundidee
+## Core Idea
 
-Symfony beschreibt den Dependency-Injection-Container als zentrale Stelle, an
-der die Konstruktion von Objekten standardisiert wird. Der Kernel uebernimmt
-diese Idee fuer WordPress:
+Symfony describes the dependency injection container as the central place where
+object construction is standardized. The kernel brings that same idea to
+WordPress:
 
-- Services werden im Container definiert, nicht in Plugin-Bootstrap-Dateien.
-- Plugins und Themes liefern Bundles mit `Resources/config/` oder `config/`.
-- Die Runtime nutzt einen kompilierten Symfony-Container statt verstreuter
-  globaler Singletons.
-- WordPress-Hooks werden als Service-Tags oder Attribute beschrieben und beim
-  Booten registriert.
+- Services are defined in the container instead of plugin bootstrap files.
+- Plugins and themes contribute bundles with `Resources/config/` or `config/`.
+- Runtime code uses a compiled Symfony container instead of scattered global
+  singletons.
+- WordPress hooks are declared as service tags or attributes and registered
+  during boot.
 
-Der Kernel ist dabei keine Kopie des Symfony FrameworkBundle. Er nutzt das
-originale DependencyInjection-API, insbesondere `ContainerBuilder`,
-`Definition`, `Reference`, `DelegatingLoader`, `PhpFileLoader`,
-`YamlFileLoader`, `IniFileLoader`, `GlobFileLoader`, `DirectoryLoader`,
-`ClosureLoader`, `BundleExtension`, `PhpDumper`, Compiler Passes,
-Attribute-Autoconfiguration, `ServiceLocatorTagPass`, `ResettableServicePass`
-und `MergeExtensionConfigurationPass`, und setzt darueber eine
-WordPress-spezifische Bundle- und Hook-Schicht.
+The kernel is not a copy of Symfony FrameworkBundle. It uses the original
+DependencyInjection API, especially `ContainerBuilder`, `Definition`,
+`Reference`, `DelegatingLoader`, `PhpFileLoader`, `YamlFileLoader`,
+`IniFileLoader`, `GlobFileLoader`, `DirectoryLoader`, `ClosureLoader`,
+`BundleExtension`, `PhpDumper`, compiler passes, attribute autoconfiguration,
+`ServiceLocatorTagPass`, `ResettableServicePass`, and
+`MergeExtensionConfigurationPass`. On top of that, it adds a WordPress-specific
+bundle, hook, route, and runtime layer.
 
-## Boot-Ablauf
+## Boot Workflow
 
-Der zentrale Einstieg ist `SymPress\Kernel\App::boot()`.
+The main entry point is `SymPress\Kernel\App::boot()`.
 
-1. `App` erstellt den Kernel und den initialen Wrapper-Container.
-2. Der Kernel entdeckt aktive Bundles ueber Composer-Metadaten, `config/bundles.php`
-   und den Legacy-Filter `symfony_register_bundles`.
-3. Wenn ein passender Runtime-Container im Cache liegt, wird dieser direkt
-   verwendet.
-4. Andernfalls wird der `ContainerBuilder` vorbereitet, Bundle-Extensions
-   werden registriert, Konfiguration wird geladen, der Builder wird kompiliert
-   und per `PhpDumper` als PHP-Klasse in `var/cache/<env>/kernel` abgelegt.
-5. Der Runtime-Container wird mit synthetischen Runtime-Instanzen befuellt:
-   Kernel, App, SiteConfig, WordPress-Kontext und Wrapper-Container.
-6. `HookLoader` registriert die kompilierten `kernel.hook`-Eintraege bei
-   WordPress.
-7. Bundles und Kernel gelten danach als gebootet.
+1. `App` creates the kernel and the initial wrapper container.
+2. The kernel discovers active bundles from Composer metadata,
+   `config/bundles.php`, and the legacy `symfony_register_bundles` filter.
+3. If a matching runtime container exists in the cache, that container is used.
+4. Otherwise the kernel prepares a `ContainerBuilder`, registers bundle
+   extensions, loads configuration, compiles the builder, and dumps it with
+   `PhpDumper` into `var/cache/<env>/kernel`.
+5. The runtime container is hydrated with synthetic runtime instances: the
+   kernel, app, site config, WordPress context, and wrapper container.
+6. `HookLoader` registers compiled `kernel.hook` entries with WordPress.
+7. Bundles and the kernel are considered booted.
 
-Der Kernel emittiert waehrenddessen WordPress-Actions:
+During this workflow the kernel emits these WordPress actions:
 
 - `kernel.booting`
 - `kernel.before_container_build`
@@ -90,7 +89,7 @@ Der Kernel emittiert waehrenddessen WordPress-Actions:
 - `kernel.booted`
 - `kernel.error`
 
-Zusaetzlich existieren Legacy-Actions:
+Legacy compatibility actions are still emitted:
 
 - `symfony_before_container_build`
 - `symfony_container_ready`
@@ -98,7 +97,7 @@ Zusaetzlich existieren Legacy-Actions:
 
 ## Bundle Discovery
 
-Ein Bundle wird ueber `composer.json > extra.kernel` beschrieben:
+A bundle is described in `composer.json > extra.kernel`:
 
 ```json
 {
@@ -112,8 +111,8 @@ Ein Bundle wird ueber `composer.json > extra.kernel` beschrieben:
 }
 ```
 
-Fuer abhaengige Bundles kann `requires` gesetzt werden. Ein Paket wird nur als
-Bundle geladen, wenn seine Anforderungen installiert und aktiv sind.
+Dependent bundles can declare `requires`. A package is loaded as a bundle only
+when its requirements are installed and active.
 
 ```json
 {
@@ -127,7 +126,8 @@ Bundle geladen, wenn seine Anforderungen installiert und aktiv sind.
 }
 ```
 
-Die Discovery kann im Root-Projekt auf Paket-Prefixe eingeschraenkt werden:
+Projects can restrict discovery to package prefixes in the root
+`composer.json`:
 
 ```json
 {
@@ -139,7 +139,13 @@ Die Discovery kann im Root-Projekt auf Paket-Prefixe eingeschraenkt werden:
 }
 ```
 
-Alternativ sind manuelle Bundles moeglich:
+Composer package discovery writes a small manifest cache below
+`var/cache/<environment>/kernel`. The manifest contains only packages that match
+the configured prefixes and declare `extra.kernel`, so runtime cache hits do not
+need to scan every installed Composer package. The manifest is invalidated when
+root Composer metadata or Composer's installed package metadata changes.
+
+Manual bundles can also be registered:
 
 ```php
 <?php
@@ -150,16 +156,16 @@ return [
 ];
 ```
 
-Discovery-Reihenfolge:
+Discovery order:
 
-1. Composer-Bundles aus aktiven MU-Plugins, Plugins, Themes und Libraries.
-2. Manuelle Bundles aus `config/bundles.php`.
-3. Legacy-Bundles aus `symfony_register_bundles`.
-4. Sortierung nach Typ: MU-Plugin, Plugin, Theme, Library.
+1. Composer bundles from active MU plugins, plugins, themes, and libraries.
+2. Manual bundles from `config/bundles.php`.
+3. Legacy bundles from `symfony_register_bundles`.
+4. Sorting by type: MU plugin, plugin, theme, library.
 
-## Bundle-Klasse
+## Bundle Classes
 
-Eine Bundle-Klasse ist absichtlich klein:
+A bundle class should stay small:
 
 ```php
 <?php
@@ -175,22 +181,22 @@ final class DemoBundle extends AbstractBundle
 }
 ```
 
-`AbstractBundle` sucht automatisch nach:
+`AbstractBundle` automatically looks for:
 
 - `Resources/config/`
 - `config/`
 - `Resources/translations/`
 - `DependencyInjection\<BundleName>Extension`
 
-`build(ContainerBuilder $container)` sollte nur ueberschrieben werden, wenn ein
-Bundle Compiler Passes oder sehr spezifische Container-Anpassungen registrieren
-muss. Wird `build()` ueberschrieben, sollte `parent::build($container)` erhalten
-bleiben, damit automatische Extension-Registrierung weiterhin funktioniert.
+Override `build(ContainerBuilder $container)` only when a bundle needs compiler
+passes or very specific container customization. If `build()` is overridden,
+call `parent::build($container)` when you still want automatic extension
+registration.
 
-Alternativ kann ein Bundle die Symfony-8.1-Methoden direkt implementieren. Wenn
-keine klassische `DependencyInjection\<BundleName>Extension` existiert, erstellt
-der Kernel eine `BundleExtension` und ruft `configure()`, `prependExtension()`
-und `loadExtension()` auf dem Bundle auf.
+A bundle can also implement Symfony 8.1 bundle-extension methods directly. When
+no classic `DependencyInjection\<BundleName>Extension` exists, the kernel
+creates a `BundleExtension` and calls `configure()`, `prependExtension()`, and
+`loadExtension()` on the bundle.
 
 ```php
 <?php
@@ -225,20 +231,20 @@ final class DemoBundle extends AbstractBundle
 }
 ```
 
-Bundles erhalten ausserdem den Symfony-Lifecycle: `setContainer()`, `boot()`
-und `shutdown()` werden vom Kernel um den Runtime-Container herum ausgefuehrt.
+Bundles also receive the Symfony lifecycle. `setContainer()`, `boot()`, and
+`shutdown()` are called around the runtime container.
 
-## Container-Konfiguration
+## Container Configuration
 
-Der Kernel laedt Konfiguration in dieser Reihenfolge:
+The kernel loads configuration in this order:
 
-1. Kernel-eigene `packages/kernel/config`
-2. Bundle-Konfigurationen aus `Resources/config/` und `config/`
-3. Site-Konfiguration aus `<project>/config`
+1. Kernel defaults from `packages/kernel/config`
+2. Bundle configuration from `Resources/config/` and `config/`
+3. Site configuration from `<project>/config`
 
-Dadurch gewinnt die Site-Konfiguration gegen Bundle-Defaults.
+Site configuration therefore overrides bundle defaults.
 
-Pro Konfigurationsverzeichnis werden diese Muster geladen:
+Each configuration directory can contain these patterns:
 
 ```text
 packages/*.{php,yaml,yml,ini}
@@ -249,7 +255,7 @@ wordpress.{php,yaml,yml,ini}
 wordpress_<env>.{php,yaml,yml,ini}
 ```
 
-Konfiguration wird ueber Symfonys `DelegatingLoader` gelesen:
+Configuration is read through Symfony's `DelegatingLoader`:
 
 - `PhpFileLoader`
 - `YamlFileLoader`
@@ -259,11 +265,12 @@ Konfiguration wird ueber Symfonys `DelegatingLoader` gelesen:
 - `ClosureLoader`
 - `SymPress\Kernel\Kernel\FileLocator`
 
-Der Kernel-`FileLocator` delegiert normale Pfade an Symfony und loest
-Bundle-Ressourcen wie `@DemoBundle/Resources/config/services.yaml` ueber
-`KernelInterface::locateResource()` auf.
+The kernel `FileLocator` delegates normal paths to Symfony and resolves bundle
+resources such as `@DemoBundle/Resources/config/services.yaml` through
+`KernelInterface::locateResource()`.
 
-Eine typische Bundle-Konfiguration in `Resources/config/services.yaml` sieht so aus:
+A typical bundle service configuration lives in
+`Resources/config/services.yaml`:
 
 ```yaml
 services:
@@ -278,15 +285,15 @@ services:
             - '../../src/DemoBundle.php'
 ```
 
-`config/services.yaml` wird weiterhin als Fallback unterstuetzt. Dort bleibt
-der relative Pfad entsprechend `../src/`.
+`config/services.yaml` is still loaded as a compatibility fallback. From that
+directory, the relative service resource is usually `../src/`.
 
-Diese Resource-Definition ist wichtig, weil Symfony-Attribute nur dann
-zuverlaessig greifen, wenn die betroffenen Klassen gescannt werden.
+The resource definition matters because PHP attributes are applied when Symfony
+discovers and reflects the affected classes during a service resource scan.
 
-## Parameter
+## Parameters
 
-Der Kernel setzt zentrale Parameter:
+The kernel defines these core parameters:
 
 ```text
 kernel.project_dir
@@ -297,6 +304,7 @@ kernel.build_dir
 kernel.share_dir
 kernel.logs_dir
 kernel.package_prefixes
+kernel.package_manager.enabled
 kernel.translation_paths
 kernel.bundles
 kernel.bundles_metadata
@@ -304,32 +312,46 @@ kernel.container_class
 .kernel.config_dir
 ```
 
-Ausserdem werden ausgewahlte Environment-Variablen als Parameter verfuegbar:
+Only selected non-sensitive application environment variables are exposed as
+parameters. The default allowlist covers operational values such as
+`APP_ENV`, `APP_RUNTIME_ENV`, `APP_CACHE_DIR`, `APP_BUILD_DIR`,
+`KERNEL_PACKAGE_PREFIXES`, `SYMPRESS_KERNEL_BUILD_ID`, and
+`SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES`.
 
-- `APP_*`
-- `DB_*`
-- `WORDPRESS_*`
-- `WP_*`
+Typical request and PHP server values such as `HTTP_*`, `REQUEST_*`,
+`SCRIPT_*`, `PHP_*`, and `DOCUMENT_*` are intentionally excluded. WordPress and
+database values are not imported by wildcard; only explicit non-sensitive names
+such as `WP_ENV`, `WP_ENVIRONMENT_TYPE`, and `WORDPRESS_ENV` are allowed because
+container dumps/cache files can persist parameter values.
 
-Ausgeschlossen bleiben typische Request- und PHP-Server-Werte wie `HTTP_*`,
-`REQUEST_*`, `SCRIPT_*`, `PHP_*` und `DOCUMENT_*`.
+Secret-looking names are denied even when they would otherwise match an allowed
+prefix. This includes names containing `AUTH`, `CERT`, `CREDENTIAL`, `KEY`,
+`PASS`, `PASSWORD`, `PRIVATE`, `SALT`, `SECRET`, or `TOKEN`.
 
-Beispiel:
+Sites can allow additional non-sensitive values through `KERNEL_ENV_PARAMETERS`
+as a comma-separated list:
+
+```bash
+KERNEL_ENV_PARAMETERS=APP_PUBLIC_API_BASE_URL,APP_BUILD_CHANNEL
+```
+
+Example:
 
 ```yaml
 services:
     Acme\Demo\Service\ApiClient:
         arguments:
-            $baseUrl: '%env.app_api_base_url%'
+            $baseUrl: '%env.app_public_api_base_url%'
 ```
 
-Das Prozentzeichen in String-Werten wird beim Import escaped, damit Symfony
-Parameter-Platzhalter nicht versehentlich interpretiert werden.
+Percent signs in imported string values are escaped so Symfony does not
+accidentally interpret them as parameter placeholders.
 
-## Services und Autowiring
+## Services and Autowiring
 
-Der Kernel folgt dem Symfony-Standard: Konstruktor-Injection ist der Normalfall,
-explizite Definitionen sind fuer Sonderfaelle da.
+The kernel follows Symfony's service container rules. Constructor injection is
+the default, and explicit service definitions are reserved for the places where
+the container needs extra information.
 
 ```php
 final class NewsletterHandler
@@ -342,33 +364,97 @@ final class NewsletterHandler
 }
 ```
 
-Mit `_defaults.autowire: true` loest Symfony Klassen- und Interface-Typen
-automatisch auf. Explizite Definitionen bleiben sinnvoll fuer:
+With `_defaults.autowire: true`, Symfony reads constructor type declarations and
+injects matching services automatically. The resource scan shown above is enough
+for normal classes:
 
-- Aliase
-- Named Autowiring Aliases
-- Scalar-Bindings
-- Factories
-- Public Services
-- Tags
-- Tagged Iterators
-- Service Locators
+```yaml
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
 
-### Aliase und Public Services
+    Acme\Demo\:
+        resource: '../../src/'
+        exclude:
+            - '../../src/DemoBundle.php'
+```
 
-Services sind standardmaessig privat. Oeffentlich sollten nur Entry-Points sein,
-die bewusst aus WordPress, Tests, CLI oder Glue-Code geholt werden.
+Autowiring is deterministic. If an argument is type-hinted with a concrete
+class, Symfony uses the service whose ID is that class name. If the argument is
+type-hinted with an interface, there must be exactly one matching alias or a
+more specific named autowiring alias.
+
+```php
+namespace Acme\Demo\Report;
+
+final class ReportController
+{
+    public function __construct(
+        private readonly ReportBuilder $builder,
+    ) {
+    }
+}
+```
+
+```yaml
+services:
+    Acme\Demo\Report\:
+        resource: '../../src/Report/'
+```
+
+The `ReportController` service can be built because `ReportBuilder` is also
+registered as a service in the scanned namespace.
+
+### Interfaces and Aliases
+
+When a constructor asks for an interface, point that interface at the default
+implementation:
+
+```php
+namespace Acme\Demo\Contract;
+
+interface FormatterInterface
+{
+    public function format(array $payload): string;
+}
+```
+
+```php
+namespace Acme\Demo\Formatter;
+
+use Acme\Demo\Contract\FormatterInterface;
+
+final class HtmlFormatter implements FormatterInterface
+{
+    public function format(array $payload): string
+    {
+        return '<pre>' . esc_html(wp_json_encode($payload)) . '</pre>';
+    }
+}
+```
 
 ```yaml
 services:
     Acme\Demo\Contract\FormatterInterface:
         alias: Acme\Demo\Formatter\HtmlFormatter
+```
 
+Services are private by default. Mark services public only when they are real
+entry points that WordPress glue code, tests, CLI commands, or compatibility
+layers intentionally fetch from the container.
+
+```yaml
+services:
     Acme\Demo\Admin\SettingsPage:
         public: true
 ```
 
-Named Aliases passen zu `#[Target]`:
+### Multiple Implementations and `#[Target]`
+
+If several services implement the same interface, use named autowiring aliases.
+This mirrors Symfony's autowiring behavior and keeps the choice local to the
+argument through the `#[Target]` attribute.
 
 ```yaml
 services:
@@ -380,6 +466,7 @@ services:
 ```
 
 ```php
+use Acme\Demo\Contract\FormatterInterface;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 
 final class FormatterSelection
@@ -394,10 +481,50 @@ final class FormatterSelection
 }
 ```
 
-## Methoden- und Setter-Injection
+For Symfony 8.1 and newer, prefer `#[Target]` for named autowiring aliases.
+Relying only on the parameter name is deprecated. The value passed to
+`#[Target]` is the named alias target, not a service ID.
 
-Konstruktor-Injection bleibt bevorzugt. Setter-Injection ist fuer optionale oder
-nachtraeglich konfigurierbare Abhaengigkeiten sinnvoll.
+### Scalar Values and `#[Autowire]`
+
+Autowiring cannot guess scalar values such as strings, integers, arrays, DSNs,
+feature flags, or WordPress option names. Use explicit arguments, binds, or the
+Symfony `#[Autowire]` attribute.
+
+```yaml
+parameters:
+    demo.api_base_url: 'https://api.example.test'
+
+services:
+    Acme\Demo\Api\ApiClient:
+        arguments:
+            $baseUrl: '%demo.api_base_url%'
+```
+
+The same choice can be expressed at the constructor argument:
+
+```php
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+
+final class ApiClient
+{
+    public function __construct(
+        #[Autowire(param: 'demo.api_base_url')]
+        private readonly string $baseUrl,
+    ) {
+    }
+}
+```
+
+Use YAML for shared package policy and attributes for values that are tightly
+bound to the consuming class.
+
+### Method and Setter Injection
+
+Constructor injection remains preferred. Use method or setter injection for
+optional dependencies or dependencies that must be configured after
+construction. Symfony's `#[Required]` attribute marks those methods for
+automatic calls during service creation.
 
 ```php
 use Symfony\Contracts\Service\Attribute\Required;
@@ -414,7 +541,7 @@ final class RequiredSummary
 }
 ```
 
-YAML-Variante:
+The equivalent YAML definition remains available:
 
 ```yaml
 services:
@@ -423,10 +550,11 @@ services:
             - setFormatter: ['@Acme\Demo\Formatter\HtmlFormatter']
 ```
 
-## Tags und Tagged Collections
+### Tags and Tagged Collections
 
-Tags sind der wichtigste Mechanismus, um lose gekoppelte Plugin-Erweiterungen zu
-modellieren.
+Tags model loosely coupled plugin extensions. Interfaces can declare their
+default tag with `#[AutoconfigureTag]`, and implementations can refine the tag
+metadata with `#[AsTaggedItem]`.
 
 ```php
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
@@ -451,6 +579,8 @@ final class PrimaryPanel implements PanelInterface
 }
 ```
 
+Inject tagged services with `#[AutowireIterator]`:
+
 ```php
 use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 
@@ -464,7 +594,7 @@ final class PanelSummary
 }
 ```
 
-YAML-Variante:
+The YAML equivalent is:
 
 ```yaml
 services:
@@ -477,11 +607,11 @@ services:
             $panels: !tagged_iterator demo.panel
 ```
 
-## Service Locators
+### Service Locators
 
-Service Locators sind fuer gezielten, lazy Zugriff auf eine kleine Menge
-bekannter Services geeignet. Sie sind die saubere Alternative zu Arrays mit
-Service-IDs oder zum Injizieren des ganzen Containers.
+Service locators are useful for lazy access to a small, known set of services.
+They are the clean alternative to arrays of service IDs or injecting the whole
+application container.
 
 ```php
 use Psr\Container\ContainerInterface;
@@ -500,15 +630,15 @@ final class FormatterLocator
 }
 ```
 
-Der Kernel selbst nutzt diese Idee fuer WordPress-Hooks: `HookCompilerPass`
-sammelt alle `kernel.hook`-Services und registriert sie ueber
-`ServiceLocatorTagPass::register()`. Dadurch werden Hook-Services erst dann aus
-dem Container geholt, wenn WordPress den Hook tatsaechlich ausfuehrt.
+The kernel uses the same idea internally for WordPress hooks:
+`HookCompilerPass` collects `kernel.hook` services and registers them through
+`ServiceLocatorTagPass::register()`. Hook services are fetched from the
+container only when WordPress executes the hook.
 
 ## Factories
 
-Factories eignen sich fuer Services, deren Konstruktion WordPress-State,
-Legacy-APIs oder externe SDKs einbeziehen muss.
+Factories are a good fit for services whose construction depends on WordPress
+state, legacy APIs, or external SDKs.
 
 ```yaml
 services:
@@ -516,7 +646,7 @@ services:
         factory: ['Acme\Demo\Factory\CalendarFactory', 'create']
 ```
 
-Auch statische Factories und Service-Methoden sind moeglich:
+Static factories and service-method factories are also supported:
 
 ```yaml
 services:
@@ -528,10 +658,10 @@ services:
         factory: ['@Acme\Demo\EventSystem', 'getDispatcher']
 ```
 
-## Lazy Services und Service Closures
+## Lazy Services and Service Closures
 
-Teure Integrationen sollten lazy sein, damit WordPress-Requests nicht unnoetig
-Objekte materialisieren.
+Expensive integrations should be lazy so normal WordPress requests do not
+materialize unnecessary objects.
 
 ```php
 use Symfony\Component\DependencyInjection\Attribute\Lazy;
@@ -542,8 +672,8 @@ final class ExpensiveApiClient
 }
 ```
 
-Service Closures sind ebenfalls verfuegbar, wenn ein einzelner Service erst bei
-Bedarf erzeugt werden soll:
+Service closures are available when exactly one service should be created only
+on demand:
 
 ```yaml
 services:
@@ -552,13 +682,13 @@ services:
             $clientFactory: !service_closure '@Acme\Demo\Api\ExpensiveApiClient'
 ```
 
-Im Kernel-Hook-System ist Lazy-Verhalten bereits eingebaut, weil Hook-Callbacks
-Closures sind, die den eigentlichen Service erst beim Hook-Aufruf aus dem
-Locator holen.
+The hook system already has lazy behavior built in because hook callbacks are
+closures that fetch the real service from a locator when WordPress calls the
+hook.
 
-## Optionale Abhaengigkeiten
+## Optional Dependencies
 
-Optionale Services sollten explizit modelliert werden:
+Optional services should be modeled explicitly:
 
 ```yaml
 services:
@@ -567,7 +697,7 @@ services:
             $logger: '@?logger'
 ```
 
-Bei Methodenaufrufen kann Symfony fehlende optionale Services ignorieren:
+Symfony can also ignore missing optional services in method calls:
 
 ```yaml
 services:
@@ -576,14 +706,13 @@ services:
             - setProfiler: ['@?Acme\Demo\Profiler\Profiler']
 ```
 
-Fuer Kernellogik gilt: ein fehlender optionaler WordPress-Service sollte nicht
-den gesamten Kernel-Boot abbrechen. Bei notwendigen Services sollte der Fehler
-dagegen frueh im Compile-Schritt sichtbar werden.
+For kernel code, a missing optional WordPress service should not break the
+entire kernel boot. Required services should fail early during compilation.
 
-## Nicht geteilte Services
+## Non-Shared Services
 
-Symfony-Services sind standardmaessig shared. Fuer zustandsbehaftete Objekte,
-die pro Zugriff neu erzeugt werden muessen, kann `shared: false` gesetzt werden.
+Symfony services are shared by default. Use `shared: false` for stateful objects
+that must be recreated for each access.
 
 ```yaml
 services:
@@ -591,13 +720,13 @@ services:
         shared: false
 ```
 
-Das sollte im WordPress-Kontext sparsam eingesetzt werden. Viele Services leben
-nur fuer einen Request; zusaetzliche Instanzen machen Debugging und Hook-Verhalten
-schnell unuebersichtlich.
+Use this sparingly in WordPress. Many services already live for only one
+request, and extra instances can make debugging and hook behavior harder to
+reason about.
 
 ## Parent Services
 
-Parent Services koennen gemeinsame Definitionsteile buendeln:
+Parent services can bundle common definition parts:
 
 ```yaml
 services:
@@ -612,14 +741,14 @@ services:
             $topic: 'stripe'
 ```
 
-Der Kernel kompiliert den Container vollstaendig. Damit stehen Symfony-Features
-wie Parent Services zur Verfuegung, solange die verwendeten Loader und
-Definitionen sie unterstuetzen.
+The kernel fully compiles the container, so Symfony features such as parent
+services are available whenever the selected loaders and definitions support
+them.
 
 ## Service Decoration
 
-Service Decoration ist geeignet, wenn ein Bundle Verhalten eines anderen
-Services erweitern moechte, ohne dessen Klasse zu ersetzen.
+Service decoration is useful when a bundle wants to extend another service's
+behavior without replacing that service's class.
 
 ```yaml
 services:
@@ -629,15 +758,15 @@ services:
             $inner: '@Acme\Demo\TracingMailer.inner'
 ```
 
-Im Projekt sollte Decoration gegenueber globalen WordPress-Filtern bevorzugt
-werden, wenn es wirklich um Service-Verhalten geht. Fuer WordPress-Ausgabe,
-Hooks und Plugin-Integrationen bleiben `kernel.hook`-Tags oft lesbarer.
+Prefer decoration over global WordPress filters when the change is truly about
+service behavior. For WordPress output, hooks, and plugin integrations,
+`kernel.hook` tags are often clearer.
 
 ## Configurators
 
-Symfony Configurators rufen nach der Konstruktion eine Methode oder Callable auf,
-um einen Service final einzurichten. Das ist nuetzlich, wenn ein Service nicht
-alle Optionen sinnvoll im Konstruktor entgegennehmen kann.
+Symfony configurators call a method or callable after construction to finish
+setting up a service. This is useful when a service cannot reasonably accept
+all options in its constructor.
 
 ```yaml
 services:
@@ -645,13 +774,13 @@ services:
         configurator: ['Acme\Demo\Factory\ClientConfigurator', 'configure']
 ```
 
-Fuer neue Services sollte Konstruktor-Injection bevorzugt werden. Configurators
-sind vor allem fuer Drittanbieterobjekte oder Legacy-Objekte sinnvoll.
+Prefer constructor injection for new services. Configurators are mostly useful
+for third-party objects and legacy objects.
 
 ## Expressions
 
-Symfony Expressions koennen spezielle Werte aus Services, Parametern oder Env
-berechnen.
+Symfony expressions can compute special values from services, parameters, or
+environment values.
 
 ```yaml
 services:
@@ -660,13 +789,13 @@ services:
             $dsn: '@=service("Acme\\Demo\\Config\\ApiConfig").dsn()'
 ```
 
-Im Kernel sollten Expressions die Ausnahme bleiben. Kleine Factory-Services sind
-meist testbarer und einfacher zu debuggen.
+In kernel packages, expressions should be rare. Small factory services are
+usually easier to test and debug.
 
-## Core Services und synthetische Services
+## Core and Synthetic Services
 
-Der Kernel registriert vertraute Symfony-Core-Services und die notwendigen
-Runtime-Bruecken fuer WordPress:
+The kernel registers familiar Symfony-style core services and the runtime
+bridges needed for WordPress:
 
 ```text
 kernel
@@ -681,8 +810,8 @@ services_resetter
 container.env_var_processor
 ```
 
-Zusaetzlich nutzt der Kernel synthetische Services fuer Runtime-Objekte, die
-der Container nicht selbst konstruieren darf:
+It also uses synthetic services for runtime objects that the container must not
+construct on its own:
 
 ```text
 kernel.container
@@ -692,9 +821,9 @@ kernel.kernel
 kernel.app
 ```
 
-Diese IDs werden vor der Kompilierung als synthetic und public registriert und
-nach dem Erzeugen des Runtime-Containers mit echten Instanzen befuellt. Aliase
-machen sie per Klasse oder Interface injizierbar:
+These IDs are registered as synthetic and public before compilation. After the
+runtime container is created, the kernel injects the real instances. Aliases
+make those objects injectable by class or interface:
 
 ```text
 Psr\Container\ContainerInterface
@@ -724,35 +853,34 @@ final class ContextAwareService
 }
 ```
 
-Das entspricht dem Symfony-Konzept synthetischer Services, ist hier aber zentral
-fuer die Bruecke zwischen kompiliertem Container und laufender WordPress-App.
+This follows Symfony's synthetic service concept and applies it to the bridge
+between the compiled container and the running WordPress application.
 
-Services, die `Symfony\Contracts\Service\ResetInterface` implementieren, werden
-automatisch mit `kernel.reset` getaggt und durch `services_resetter`
-zurueckgesetzt. Service Subscriber und Service Locators werden ebenfalls mit den
-Symfony-Standardtags autokonfiguriert.
+Services that implement `Symfony\Contracts\Service\ResetInterface` are
+autoconfigured with the `kernel.reset` tag and reset through
+`services_resetter`. Service subscribers and service locators are also
+autoconfigured with Symfony's standard tags.
 
-Zum Core gehoeren ausserdem Symfony-nahe Services und Aliases:
+The core layer also registers Symfony-adjacent services and aliases:
 `filesystem`, optional `event_dispatcher`, optional `clock`,
-`container.expression_language`, PSR/EventDispatcher-Aliases,
-`LoggerAwareInterface`-Autoconfiguration und die ueblichen
-`container.excluded`-Markierungen fuer Compiler-Passes, PHP-Attribute, Enums
-und PHPUnit-TestCases.
+`container.expression_language`, PSR/EventDispatcher aliases,
+`LoggerAwareInterface` autoconfiguration, and the usual `container.excluded`
+markers for compiler passes, PHP attributes, enums, and PHPUnit test cases.
 
 ## Compiler Passes
 
-Der Kernel registriert eigene und Symfony-Compiler-Passes:
+The kernel registers its own compiler passes and selected Symfony passes:
 
 - `HookCompilerPass`
 - `AddConsoleCommandPass`
 - `AddBehaviorDescribingTagsPass`
 - `ResettableServicePass`
 - `MergeExtensionConfigurationPass`
-- Bundle-spezifische Passes ueber `BundleInterface::build()`
+- Bundle-specific passes through `BundleInterface::build()`
 
-`HookCompilerPass` sammelt alle Services mit dem Tag `kernel.hook`, validiert
-Methode, Typ, Prioritaet und `accepted_args`, baut einen Service Locator und
-setzt die Hook-Metadaten auf `HookLoader`.
+`HookCompilerPass` collects all services tagged with `kernel.hook`, validates
+method, type, priority, and `accepted_args`, builds a service locator, and sets
+the hook metadata on `HookLoader`.
 
 ```yaml
 services:
@@ -761,12 +889,12 @@ services:
             - { name: kernel.hook, hook: 'admin_menu', method: register }
 ```
 
-Der Pass arbeitet korrekt auf Definitionen statt auf Service-Instanzen. Das ist
-wichtig, weil Compiler Passes vor dem Runtime-Container laufen.
+The pass works on definitions, not service instances. That matters because
+compiler passes run before the runtime container exists.
 
 ## WordPress Hooks
 
-Hooks bleiben deklarativ und containerbasiert.
+Hooks stay declarative and container-based.
 
 ```yaml
 services:
@@ -779,21 +907,21 @@ services:
             - { name: kernel.hook, hook: 'the_content', method: filter, type: filter, priority: 20 }
 ```
 
-Unterstuetzte Tag-Attribute:
+Supported tag attributes:
 
-- `hook`: WordPress-Hook-Name
-- `method`: Methode, Standard ist `__invoke`
-- `type`: `action` oder `filter`, Standard ist `action`
-- `priority`: Standard ist `10`
-- `accepted_args`: optional; wenn nicht gesetzt, wird die Anzahl der
-  Methodenparameter reflektiert
+- `hook`: WordPress hook name
+- `method`: service method, defaults to `__invoke`
+- `type`: `action` or `filter`, defaults to `action`
+- `priority`: defaults to `10`
+- `accepted_args`: optional; when omitted, the kernel reflects the method
+  parameter count
 
-Die Attribute werden beim Compile-Schritt validiert. Fehlende Methoden,
-ungueltige Typen oder falsche `accepted_args` fallen damit frueh auf.
+Attributes are validated during compilation. Missing methods, invalid hook
+types, and invalid `accepted_args` values fail early.
 
 ### `#[AsHook]`
 
-Der Kernel ergaenzt Symfony um ein WordPress-spezifisches Attribut:
+The kernel adds a WordPress-specific attribute:
 
 ```php
 use SymPress\Kernel\Attribute\AsHook;
@@ -807,7 +935,7 @@ final class PluginBootstrap
 }
 ```
 
-Methoden-Attribut:
+The attribute can also be placed on a method:
 
 ```php
 final class AdminNotice
@@ -819,15 +947,15 @@ final class AdminNotice
 }
 ```
 
-Wenn `method` auf Methodenebene nicht gesetzt ist, verwendet der Kernel den
-Namen der annotierten Methode.
+When `method` is not set on a method-level attribute, the kernel uses the name
+of the annotated method.
 
 ## Console Integration
 
-Der Kernel registriert Symfony Console Commands ueber
-`Symfony\Component\Console\Attribute\AsCommand`. Dazu wird das Attribut fuer
-Autoconfiguration auf `console.command` gemappt und `AddConsoleCommandPass`
-eingesetzt.
+The kernel registers Symfony Console commands through
+`Symfony\Component\Console\Attribute\AsCommand`. The attribute is mapped to the
+`console.command` tag through autoconfiguration, and `AddConsoleCommandPass`
+collects the commands.
 
 ```php
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -839,13 +967,13 @@ final class DemoReportCommand extends Command
 }
 ```
 
-`WpCliConsoleBridge` registriert bei WP-CLI den Befehl:
+`WpCliConsoleBridge` exposes the command through WP-CLI:
 
 ```bash
 wp console demo:report
 ```
 
-Der Kernel bringt ausserdem kleine Container-Werkzeuge mit:
+The kernel also ships small container tools:
 
 ```bash
 wp console debug:container
@@ -856,56 +984,95 @@ wp console container:dump --format=yaml
 
 ## Runtime Cache
 
-Der Runtime-Container wird in `var/cache/<environment>/kernel` geschrieben.
-Der Cache-Key basiert auf einem Fingerprint aus:
+The runtime container is written to `var/cache/<environment>/kernel`. The cache
+key is based on a fingerprint of:
 
-- Projektverzeichnis
-- Environment
-- Debug-Status
-- Deployment-Fingerprint
-- Kernel-Quellen
-- Bundle-Metadaten und Bundle-Quellen
-- geladene Config-Dateien
+- project directory
+- environment
+- debug flag
+- deployment fingerprint
+- kernel package metadata
+- bundle metadata
+- loaded configuration files
 
-Wenn `WP_DEBUG` aktiv ist, verfolgt der Kernel Source-Hashes. In Produktion
-nutzt er schnellere Zeitstempel und kann einen Build-Identifier verwenden:
+The source files that can change compiled services are stored in the cache
+metadata as a manifest. Production cache hits use the deployment fingerprint as
+the normal invalidation boundary and do not stat every source file on every
+request. Enable `SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES=1` only for
+environments where source-level freshness checks are worth the request-time
+filesystem cost.
+
+Loaded configuration resources are tracked separately, including files imported
+from PHP/YAML config. Cache hits always validate those config resources so
+service wiring changes invalidate the runtime container.
+
+Deployments can include an explicit build identifier to force a new cache
+identity:
 
 ```bash
 SYMPRESS_KERNEL_BUILD_ID=2026-06-13T120000Z
 ```
 
-Die Cache-Dateien werden mit Locking geschrieben. Dadurch wird verhindert, dass
-parallele Requests denselben Container gleichzeitig dumpen.
+Operational notes:
 
-## Uebersetzungen
+- Production deployments should clear `var/cache/<environment>/kernel` or set a
+  new `SYMPRESS_KERNEL_BUILD_ID` when bundle PHP source changes are deployed.
+- `SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES=1` restores source-file mtime/size
+  validation on runtime cache hits, but it reintroduces request-time filesystem
+  stats for every tracked source resource.
+- Configuration files and imported config resources are always validated on
+  cache hits because they directly affect service wiring.
+- The discovery manifest is safe for normal Composer-based deployments because
+  Composer metadata changes invalidate it. Manual edits inside `vendor/` without
+  Composer metadata changes require a kernel cache clear.
 
-Bundles koennen `Resources/translations/` bereitstellen. Der Kernel sammelt die
-Pfade in `kernel.translation_paths` und registriert `TranslationLoader` als
-public Service.
+## Environment Parameters
 
-Unterstuetzte Dateien:
+The kernel exposes only a small allowlist of non-sensitive operational
+environment variables as `env.*` container parameters. Secret-looking names such
+as `*_SECRET`, `*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_AUTH`, and `*_SALT` are
+never materialized as parameters because compiled containers and container dumps
+can be inspected through filesystem or CLI tooling.
+
+Additional non-sensitive names can be allowed through site config:
+
+```php
+$config = new EnvConfig();
+// KERNEL_ENV_PARAMETERS="APP_PUBLIC_FLAG,APP_BUILD_CHANNEL"
+```
+
+Cache files are written with locking so concurrent requests do not dump the same
+container at the same time.
+
+## Translations
+
+Bundles can provide `Resources/translations/`. The kernel collects those paths
+in `kernel.translation_paths` and registers `TranslationLoader` as a public
+service.
+
+Supported files:
 
 ```text
 *.en.xlf
 *.en.xliff
 ```
 
-Der Loader liest XLIFF-Dateien und gruppiert die Ergebnisse nach Bundle-Paket.
+The loader reads XLIFF files and groups the results by bundle package.
 
-## Zugriff auf den Container vermeiden
+## Avoid Reaching Into the Container
 
-Symfony empfiehlt, Anwendungscode nicht vom Container abhaengig zu machen. Das
-gilt im Kernel besonders stark: Services sollten ihre Abhaengigkeiten ueber
-Konstruktoren, Setter, Tagged Iterator oder Locators bekommen.
+Symfony recommends keeping application code independent from the container. The
+same rule is even more important in the kernel: services should receive their
+dependencies through constructors, setters, tagged iterators, or locators.
 
-Erlaubte Container-Zugriffe sind Entry-Points:
+Allowed container access points are entry points:
 
-- `App::make()` fuer WordPress-Glue-Code
-- `HookLoader` fuer lazy Hook-Services
-- kleine Service Locators fuer bewusst begrenzte Service-Mengen
-- Tests und Debugging
+- `App::make()` for WordPress glue code
+- `HookLoader` for lazy hook services
+- small service locators for intentionally limited service sets
+- tests and debugging
 
-Nicht empfohlen:
+Avoid this:
 
 ```php
 final class BadExample
@@ -916,7 +1083,7 @@ final class BadExample
 }
 ```
 
-Besser:
+Prefer this:
 
 ```php
 final class GoodExample
@@ -929,8 +1096,8 @@ final class GoodExample
 
 ## Debugging
 
-Der Kernel bietet kleine Entsprechungen zu Symfonys Container-Werkzeugen fuer
-den Site-Container:
+The kernel provides small equivalents to Symfony's container tooling for the
+site container:
 
 ```bash
 wp console debug:container
@@ -945,45 +1112,45 @@ wp console container:dump --format=xml
 wp console container:dump --format=php
 ```
 
-Weitere praktische Debug-Punkte bleiben:
+Useful debug points:
 
-- `kernel.container_configured`, um geladene Config-Dateien zu inspizieren.
-- `kernel.container_ready`, um nach dem Runtime-Container zu schauen.
-- `var/cache/<env>/kernel/meta.php`, um Fingerprint, Klasse und Cache-Datei zu
-  pruefen.
-- Der Showcase-Plugin-Screen fuer Attribute, Locators, Tags und Lazy Services.
+- `kernel.container_configured`, to inspect loaded configuration files.
+- `kernel.container_ready`, to inspect the runtime container.
+- `var/cache/<env>/kernel/meta.php`, to inspect fingerprint, class, and cache
+  file metadata.
+- The showcase plugin screen for attributes, locators, tags, and lazy services.
 
-## Abgleich mit Symfony Learn More
+## Symfony Learn More Map
 
-| Symfony-Thema | Bedeutung im Kernel |
+| Symfony topic | Meaning in the kernel |
 | --- | --- |
-| Compiling the Container | Bei Cache-Miss kompiliert der Kernel einen Runtime-Container und dumpt ihn mit `PhpDumper`. |
-| Container Building Workflow | `App::boot()` bildet den Workflow: discover, configure, compile, dump, hydrate, register hooks. |
-| Configurable Bundles | Klassische Extensions und Symfony-8.1-`BundleExtension` mit `configure()`/`loadExtension()` werden unterstuetzt. |
-| Service Aliases und Public Services | Direkt unterstuetzt; public nur fuer echte Entry-Points verwenden. |
-| Autowiring | Standard ueber `_defaults.autowire: true`; Resource-Scans sind empfohlen. |
-| Method Calls und Setter Injection | Direkt unterstuetzt, inkl. `#[Required]`. |
-| Compiler Passes | Direkt unterstuetzt; Bundles koennen Passes in `build()` registrieren. |
-| Configurators | Symfony-Feature, nutzbar fuer Legacy-/Drittanbieterobjekte. |
-| Debug Container | `debug:container`, `lint:container` und `container:dump` sind ueber `wp console` verfuegbar; Tag-, Type-, Argument- und Env-Var-Ansichten sind vorhanden. |
-| Core Services | `parameter_bag`, `event_dispatcher`, `filesystem`, `clock`, `file_locator`, `reverse_container`, `config_cache_factory`, `services_resetter`, ExpressionLanguage und Env-Processor sind vorhanden, wenn die jeweiligen Symfony-Komponenten installiert sind. |
-| Service Definition Objects | Relevant fuer Kernel, Bundles und Compiler Passes. |
-| Expressions | Verfuegbar, aber sparsam einsetzen; Factories sind meist klarer. |
-| Factories | Direkt nutzbar und im Projekt bereits gaengig fuer WordPress-nahe Services. |
-| Imports | Der Kernel importiert automatisch bekannte Config-Muster aus Kernel, Bundles und Site. |
-| Injection Types | Constructor Injection ist Standard; Setter/Property nur bewusst nutzen. |
-| Lazy Services | Direkt unterstuetzt, inkl. `#[Lazy]`; Hook-Aufloesung ist lazy. |
-| Optional Dependencies | Direkt nutzbar mit optionalen Referenzen. |
-| Parent Services | Direkt nutzbar, weil der Container voll kompiliert wird. |
-| Request Service | Kein Symfony RequestStack per Default; fuer WordPress Kontext `WpContext` injizieren. |
-| Service Closures | Direkt nutzbar; Hook-Callbacks nutzen dasselbe Lazy-Prinzip. |
-| Service Decoration | Direkt nutzbar und fuer Service-Erweiterung sauberer als globale Hooks. |
-| Service Subscribers & Locators | Direkt nutzbar; der Kernel nutzt Service Locator fuer Hook-Services. |
-| Non Shared Services | Direkt nutzbar mit `shared: false`, aber sparsam verwenden. |
-| Synthetic Services | Zentral im Kernel fuer Runtime-Objekte wie App, Kernel, Config und Kontext. |
-| Service Tags | Zentral: `kernel.hook`, Bundle-eigene Tags und tagged iterators. |
+| Compiling the Container | On cache miss, the kernel compiles a runtime container and dumps it with `PhpDumper`. |
+| Container Building Workflow | `App::boot()` provides the workflow: discover, configure, compile, dump, hydrate, register hooks. |
+| Configurable Bundles | Classic extensions and Symfony 8.1 `BundleExtension` methods with `configure()` and `loadExtension()` are supported. |
+| Service Aliases and Public Services | Supported directly; keep public services limited to real entry points. |
+| Autowiring | Standard through `_defaults.autowire: true`; resource scans are recommended. |
+| Method Calls and Setter Injection | Supported directly, including `#[Required]`. |
+| Compiler Passes | Supported directly; bundles can register passes in `build()`. |
+| Configurators | Symfony feature, useful for legacy or third-party objects. |
+| Debug Container | `debug:container`, `lint:container`, and `container:dump` are available through `wp console`; tag, type, argument, and env-var views are supported. |
+| Core Services | `parameter_bag`, `event_dispatcher`, `filesystem`, `clock`, `file_locator`, `reverse_container`, `config_cache_factory`, `services_resetter`, ExpressionLanguage, and env processors are present when the relevant Symfony components are installed. |
+| Service Definition Objects | Relevant for the kernel, bundles, and compiler passes. |
+| Expressions | Available, but should be used sparingly; factories are usually clearer. |
+| Factories | Supported directly and useful for WordPress-adjacent services. |
+| Imports | The kernel automatically imports known configuration patterns from the kernel, bundles, and site. |
+| Injection Types | Constructor injection is the default; setter and property injection should be deliberate. |
+| Lazy Services | Supported directly, including `#[Lazy]`; hook resolution is lazy. |
+| Optional Dependencies | Supported directly with optional references. |
+| Parent Services | Supported because the container is fully compiled. |
+| Request Service | No Symfony `RequestStack` is registered by default; inject `WpContext` for WordPress context. |
+| Service Closures | Supported directly; hook callbacks use the same lazy principle. |
+| Service Decoration | Supported directly and cleaner than global hooks for service-level extension. |
+| Service Subscribers & Locators | Supported directly; the kernel uses service locators for hook services. |
+| Non Shared Services | Supported with `shared: false`; use sparingly. |
+| Synthetic Services | Central to runtime objects such as App, Kernel, Config, and Context. |
+| Service Tags | Central to `kernel.hook`, bundle-specific extension points, and tagged iterators. |
 
-## Quellen
+## Sources
 
 - [Symfony DependencyInjection Component](https://symfony.com/doc/current/components/dependency_injection.html)
 - [Symfony Service Container](https://symfony.com/doc/current/service_container.html)

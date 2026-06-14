@@ -18,6 +18,7 @@ the original Symfony component behavior.
 - `dependency-injection.md`
 - `attributes.md`
 - `hooks.md`
+- `routing.md`
 - `showcase-plugin.md`
 
 ## Guiding Principles
@@ -29,3 +30,5 @@ the original Symfony component behavior.
 - Symfony DI attributes such as `#[AutowireIterator]` and
   `#[AutowireLocator]` without kernel-specific wrappers
 - declarative WordPress hooks through `kernel.hook` or `#[AsHook]`
+- controller routes through `#[Route]`, with `format: 'json'` used for
+  WordPress REST endpoint registration
