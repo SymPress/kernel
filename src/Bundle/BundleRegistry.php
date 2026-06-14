@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Bundle;
 
+/** @implements \IteratorAggregate<int, BundleMetadata> */
 final class BundleRegistry implements \IteratorAggregate, \Countable
 {
     /** @var array<int, BundleMetadata> */
@@ -53,6 +54,18 @@ final class BundleRegistry implements \IteratorAggregate, \Countable
         }
 
         return $directories;
+    }
+
+    /** @return array<int, string> */
+    public function identityFingerprintParts(): array
+    {
+        $parts = [];
+
+        foreach ($this->bundles as $bundle) {
+            $parts = [...$parts, ...$bundle->identityFingerprintParts()];
+        }
+
+        return $parts;
     }
 
     /** @return array<int, string> */

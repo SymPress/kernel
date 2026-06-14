@@ -6,14 +6,28 @@ namespace SymPress\Kernel\Resolver;
 
 final class ActivePackageResolver
 {
+    /** @var array<string, bool> */
+    private array $active = [];
+
+    /** @var list<string>|null */
+    private ?array $activePluginEntries = null;
+
     public function isActive(string $type, string $entry, string $installPath): bool
     {
-        return match ($type) {
+        $key = implode("\0", [$type, $entry, $installPath]);
+
+        if (array_key_exists($key, $this->active)) {
+            return $this->active[$key];
+        }
+
+        $this->active[$key] = match ($type) {
             'wordpress-muplugin' => $this->isMuPluginActive($entry, $installPath),
             'wordpress-plugin' => $this->isPluginActive($entry, $installPath),
             'wordpress-theme' => $this->isThemeActive($entry, $installPath),
             default => false,
         };
+
+        return $this->active[$key];
     }
 
     private function isMuPluginActive(string $entry, string $installPath): bool
@@ -40,6 +54,38 @@ final class ActivePackageResolver
             return false;
         }
 
+        $active = $this->activePluginEntries();
+
+        if (in_array($entry, $active, true)) {
+            return true;
+        }
+
+        $pluginDir = $this->pluginDir();
+
+        if ($pluginDir === null) {
+            return false;
+        }
+
+        foreach ($active as $activeEntry) {
+            if ($activeEntry === '') {
+                continue;
+            }
+
+            if ($this->isSameEntryFile($pluginDir, $activeEntry, $installPath, $entry)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @return list<string> */
+    private function activePluginEntries(): array
+    {
+        if ($this->activePluginEntries !== null) {
+            return $this->activePluginEntries;
+        }
+
         $active = [];
         $activePlugins = get_option('active_plugins', []);
 
@@ -59,27 +105,16 @@ final class ActivePackageResolver
             }
         }
 
-        if (in_array($entry, $active, true)) {
-            return true;
-        }
+        $this->activePluginEntries = array_values(
+            array_unique(
+                array_filter(
+                    $active,
+                    static fn (mixed $entry): bool => is_string($entry) && $entry !== '',
+                ),
+            ),
+        );
 
-        $pluginDir = $this->pluginDir();
-
-        if ($pluginDir === null) {
-            return false;
-        }
-
-        foreach ($active as $activeEntry) {
-            if (!is_string($activeEntry) || $activeEntry === '') {
-                continue;
-            }
-
-            if ($this->isSameEntryFile($pluginDir, $activeEntry, $installPath, $entry)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->activePluginEntries;
     }
 
     private function isThemeActive(string $entry, string $installPath): bool
@@ -200,7 +235,7 @@ final class ActivePackageResolver
     {
         $realPath = realpath($path);
 
-        if (is_string($realPath) && $realPath !== '') {
+        if (is_string($realPath)) {
             $path = $realPath;
         }
 

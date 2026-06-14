@@ -47,12 +47,12 @@ final readonly class BundleMetadata
     }
 
     /** @return array<int, string> */
-    public function fingerprintParts(bool $trackSourceHashes = true): array
+    public function identityFingerprintParts(): array
     {
         $reflection = new \ReflectionObject($this->bundle);
         $bundleFile = (string) $reflection->getFileName();
 
-        $parts = [
+        return [
             $this->package,
             $this->type,
             $this->entry,
@@ -60,26 +60,28 @@ final readonly class BundleMetadata
             sprintf(
                 '%s:%s',
                 $this->composerFile,
-                is_file($this->composerFile) ? (string) filemtime($this->composerFile) : 'missing',
+                $this->sourceFileFingerprint($this->composerFile, false),
             ),
-        ];
-
-        if (!$trackSourceHashes) {
-            $parts[] = sprintf(
+            sprintf(
                 '%s:%s',
                 $bundleFile,
-                $bundleFile !== '' && is_file($bundleFile) ? (string) filemtime($bundleFile) : 'missing',
-            );
+                $this->sourceFileFingerprint($bundleFile, false),
+            ),
+        ];
+    }
+
+    /** @return array<int, string> */
+    public function fingerprintParts(bool $trackSourceHashes = true): array
+    {
+        $parts = $this->identityFingerprintParts();
+
+        if (!$trackSourceHashes) {
+            $parts[] = $this->sourceFingerprint(false);
 
             return $parts;
         }
 
-        $parts[] = $this->sourceFingerprint();
-        $parts[] = sprintf(
-            '%s:%s',
-            $bundleFile,
-            $bundleFile !== '' && is_file($bundleFile) ? sha1_file($bundleFile) : 'missing',
-        );
+        $parts[] = $this->sourceFingerprint(true);
         $parts[] = sprintf(
             '%s:%s',
             $this->composerFile,
@@ -89,7 +91,7 @@ final readonly class BundleMetadata
         return $parts;
     }
 
-    private function sourceFingerprint(): string
+    private function sourceFingerprint(bool $trackSourceHashes): string
     {
         $sourceDir = sprintf('%s/src', rtrim($this->path, '/'));
 
@@ -108,11 +110,28 @@ final readonly class BundleMetadata
             }
 
             $pathname = $file->getPathname();
-            $files[] = sprintf('%s:%s', $pathname, sha1_file($pathname));
+            $files[] = sprintf(
+                '%s:%s',
+                $pathname,
+                $this->sourceFileFingerprint($pathname, $trackSourceHashes),
+            );
         }
 
         sort($files);
 
         return sprintf('source:%s', hash('sha256', implode('|', $files)));
+    }
+
+    private function sourceFileFingerprint(string $file, bool $trackSourceHashes): string
+    {
+        if ($file === '' || !is_file($file)) {
+            return 'missing';
+        }
+
+        if ($trackSourceHashes) {
+            return (string) sha1_file($file);
+        }
+
+        return sprintf('%s:%s', (string) filemtime($file), (string) filesize($file));
     }
 }

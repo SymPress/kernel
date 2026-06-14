@@ -32,6 +32,12 @@ final class BundleDiscovery
     /** @var list<string> */
     private array $packagePrefixes;
 
+    /** @var list<string>|null */
+    private ?array $packageNames = null;
+
+    /** @var array<string, array<string, mixed>> */
+    private array $metadata = [];
+
     /** @param list<string>|array<string> $packagePrefixes Optional package-name prefixes used to narrow discovery. */
     public function __construct(
         private readonly ActivePackageResolver $resolver,
@@ -496,20 +502,41 @@ final class BundleDiscovery
     /** @return array<string, mixed> */
     private function composerMetadata(string $composerFile): array
     {
+        if (isset($this->metadata[$composerFile])) {
+            return $this->metadata[$composerFile];
+        }
+
         $contents = file_get_contents($composerFile);
 
         if (!is_string($contents) || $contents === '') {
-            return [];
+            $this->metadata[$composerFile] = [];
+
+            return $this->metadata[$composerFile];
         }
 
         $decoded = json_decode($contents, true);
 
-        return is_array($decoded) ? $decoded : [];
+        $this->metadata[$composerFile] = is_array($decoded) ? $decoded : [];
+
+        return $this->metadata[$composerFile];
     }
 
     /** @return array<int, string> */
     private function packageNames(): array
     {
+        if ($this->packageNames !== null) {
+            return $this->packageNames;
+        }
+
+        $cache = new KernelPackageManifestCache($this->projectDir, $this->environment, $this->packagePrefixes);
+        $cachedPackages = $cache->read();
+
+        if ($cachedPackages !== null) {
+            $this->packageNames = $cachedPackages;
+
+            return $this->packageNames;
+        }
+
         $packages = InstalledVersions::getInstalledPackages();
         $filtered = [];
 
@@ -518,12 +545,38 @@ final class BundleDiscovery
                 continue;
             }
 
+            if (!$this->hasKernelMetadata($package)) {
+                continue;
+            }
+
             $filtered[] = $package;
         }
 
         sort($filtered);
+        $cache->write($filtered);
 
-        return $filtered;
+        $this->packageNames = $filtered;
+
+        return $this->packageNames;
+    }
+
+    private function hasKernelMetadata(string $package): bool
+    {
+        $installPath = InstalledVersions::getInstallPath($package);
+
+        if (!is_string($installPath) || $installPath === '') {
+            return false;
+        }
+
+        $composerFile = sprintf('%s/composer.json', $installPath);
+
+        if (!is_file($composerFile)) {
+            return false;
+        }
+
+        $metadata = $this->composerMetadata($composerFile);
+
+        return is_array($metadata['extra']['kernel'] ?? null);
     }
 
     private function isKernelPackage(string $package): bool
@@ -550,10 +603,6 @@ final class BundleDiscovery
         $normalized = [];
 
         foreach ($packagePrefixes as $prefix) {
-            if (!is_string($prefix)) {
-                continue;
-            }
-
             $prefix = trim($prefix);
 
             if ($prefix === '') {

@@ -12,6 +12,18 @@ final class PackageDiscovery
     /** @var list<string> */
     private array $packagePrefixes;
 
+    /** @var list<PackageMetadata>|null */
+    private ?array $packages = null;
+
+    /** @var array<string, PackageMetadata>|null */
+    private ?array $packagesByName = null;
+
+    /** @var list<string>|null */
+    private ?array $packageNames = null;
+
+    /** @var array<string, array<string, mixed>> */
+    private array $metadata = [];
+
     /** @param list<string>|array<string> $packagePrefixes Optional package-name prefixes used to narrow discovery. */
     public function __construct(
         private readonly ActivePackageResolver $resolver,
@@ -24,6 +36,10 @@ final class PackageDiscovery
     /** @return list<PackageMetadata> */
     public function all(): array
     {
+        if ($this->packages !== null) {
+            return $this->packages;
+        }
+
         $packages = [];
 
         foreach ($this->packageNames() as $packageName) {
@@ -38,18 +54,15 @@ final class PackageDiscovery
 
         usort($packages, $this->sort(...));
 
-        return $packages;
+        $this->packages = $packages;
+        $this->packagesByName = null;
+
+        return $this->packages;
     }
 
     public function find(string $packageName): ?PackageMetadata
     {
-        foreach ($this->all() as $package) {
-            if ($package->package() === $packageName) {
-                return $package;
-            }
-        }
-
-        return null;
+        return $this->packagesByName()[$packageName] ?? null;
     }
 
     private function package(string $packageName): ?PackageMetadata
@@ -147,13 +160,13 @@ final class PackageDiscovery
         $pluginData = get_plugin_data($pluginFile, false, false);
 
         return [
-            'name'        => $this->nonEmptyString($pluginData['Name'] ?? null, $fallback['name']),
+            'name'        => $this->nonEmptyString($pluginData['Name'], $fallback['name']),
             'description' => $this->nonEmptyString(
-                $pluginData['Description'] ?? null,
+                $pluginData['Description'],
                 $fallback['description'],
             ),
             'version'     => $this->nonEmptyString(
-                $pluginData['Version'] ?? null,
+                $pluginData['Version'],
                 $fallback['version'],
             ),
         ];
@@ -204,20 +217,32 @@ final class PackageDiscovery
     /** @return array<string, mixed> */
     private function composerMetadata(string $composerFile): array
     {
+        if (isset($this->metadata[$composerFile])) {
+            return $this->metadata[$composerFile];
+        }
+
         $contents = file_get_contents($composerFile);
 
         if (!is_string($contents) || $contents === '') {
-            return [];
+            $this->metadata[$composerFile] = [];
+
+            return $this->metadata[$composerFile];
         }
 
         $decoded = json_decode($contents, true);
 
-        return is_array($decoded) ? $decoded : [];
+        $this->metadata[$composerFile] = is_array($decoded) ? $decoded : [];
+
+        return $this->metadata[$composerFile];
     }
 
     /** @return list<string> */
     private function packageNames(): array
     {
+        if ($this->packageNames !== null) {
+            return $this->packageNames;
+        }
+
         $packages = [];
 
         foreach (InstalledVersions::getInstalledPackages() as $package) {
@@ -230,7 +255,27 @@ final class PackageDiscovery
 
         sort($packages);
 
-        return $packages;
+        $this->packageNames = $packages;
+
+        return $this->packageNames;
+    }
+
+    /** @return array<string, PackageMetadata> */
+    private function packagesByName(): array
+    {
+        if ($this->packagesByName !== null) {
+            return $this->packagesByName;
+        }
+
+        $index = [];
+
+        foreach ($this->all() as $package) {
+            $index[$package->package()] = $package;
+        }
+
+        $this->packagesByName = $index;
+
+        return $this->packagesByName;
     }
 
     private function sort(PackageMetadata $left, PackageMetadata $right): int
@@ -283,10 +328,6 @@ final class PackageDiscovery
         $normalized = [];
 
         foreach ($packagePrefixes as $prefix) {
-            if (!is_string($prefix)) {
-                continue;
-            }
-
             $prefix = trim($prefix);
 
             if ($prefix === '') {

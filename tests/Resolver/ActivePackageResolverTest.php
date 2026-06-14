@@ -10,6 +10,8 @@ namespace {
     if (!function_exists('get_option')) {
         function get_option(string $option, mixed $default = false): mixed
         {
+            $GLOBALS['kernel_test_option_reads'][$option] = ($GLOBALS['kernel_test_option_reads'][$option] ?? 0) + 1;
+
             return $GLOBALS['kernel_test_options'][$option] ?? $default;
         }
     }
@@ -48,6 +50,7 @@ namespace SymPress\Kernel\Tests\Resolver {
             $filesystem->mkdir(WP_PLUGIN_DIR);
 
             $GLOBALS['kernel_test_options'] = [];
+            $GLOBALS['kernel_test_option_reads'] = [];
             $GLOBALS['kernel_test_site_options'] = [];
             $GLOBALS['kernel_test_is_multisite'] = false;
         }
@@ -103,6 +106,30 @@ namespace SymPress\Kernel\Tests\Resolver {
                     $packageDir,
                 ),
             );
+        }
+
+        public function testPluginActiveOptionsAreReadOncePerResolver(): void
+        {
+            $resolver = new ActivePackageResolver();
+            $GLOBALS['kernel_test_options']['active_plugins'] = [
+                'demo/demo.php',
+            ];
+
+            self::assertTrue(
+                $resolver->isActive(
+                    'wordpress-plugin',
+                    'demo/demo.php',
+                    $this->tmpPath('demo-package'),
+                ),
+            );
+            self::assertFalse(
+                $resolver->isActive(
+                    'wordpress-plugin',
+                    'missing/missing.php',
+                    $this->tmpPath('missing-package'),
+                ),
+            );
+            self::assertSame(1, $GLOBALS['kernel_test_option_reads']['active_plugins'] ?? 0);
         }
 
         private function tmpPath(string $prefix): string
