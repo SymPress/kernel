@@ -49,7 +49,9 @@ final class WpContext implements \JsonSerializable
 
     public static function determine(): self
     {
-        $installing = defined('WP_INSTALLING') && WP_INSTALLING;
+        $installing = function_exists('wp_installing')
+            ? wp_installing()
+            : defined('WP_INSTALLING') && (bool) constant('WP_INSTALLING');
         $xmlRpc = defined('XMLRPC_REQUEST') && XMLRPC_REQUEST;
         $isCore = defined('ABSPATH');
         $isCli = defined('WP_CLI');
@@ -181,6 +183,7 @@ final class WpContext implements \JsonSerializable
         return $this->is(self::WP_ACTIVATE);
     }
 
+    /** @return array<string, bool> */
     public function jsonSerialize(): array
     {
         return $this->data;

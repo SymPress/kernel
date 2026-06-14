@@ -77,6 +77,18 @@ final class App
             do_action(self::ACTION_ERROR, $throwable);
         }
 
+        if (function_exists('error_log')) {
+            error_log(
+                sprintf(
+                    '[sympress/kernel] %s: %s in %s:%d',
+                    $throwable::class,
+                    $throwable->getMessage(),
+                    $throwable->getFile(),
+                    $throwable->getLine(),
+                ),
+            );
+        }
+
         if (defined('WP_DEBUG') && WP_DEBUG) {
             throw $throwable;
         }
@@ -148,6 +160,7 @@ final class App
             $this->container = null;
             $this->bundles = null;
             self::handleThrowable($throwable);
+            throw $throwable;
         }
     }
 

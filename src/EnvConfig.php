@@ -76,17 +76,12 @@ class EnvConfig implements SiteConfig
         if (
             $locationClassName === ''
             || !class_exists($locationClassName)
-            || !is_subclass_of($locationClassName, Locations::class)
         ) {
             $locationClassName = GenericLocations::class;
         }
 
         $factory = [$locationClassName, 'createFromConfig'];
         $locations = $factory($this);
-
-        if (!$locations instanceof Locations) {
-            throw new \RuntimeException('Configured location resolver is invalid.');
-        }
 
         $this->locations = $locations;
 
@@ -207,6 +202,7 @@ class EnvConfig implements SiteConfig
         return $default;
     }
 
+    /** @return array{env: string, hosting: string, keys: list<string>} */
     public function jsonSerialize(): array
     {
         return [

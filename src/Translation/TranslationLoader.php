@@ -21,7 +21,7 @@ final class TranslationLoader
             $name = $bundle->id();
             $path ??= sprintf('%s/Resources/translations', $bundle->path());
 
-            if ($name === '' || $path === null || $path === '' || !is_dir($path)) {
+            if ($name === '' || $path === '' || !is_dir($path)) {
                 return;
             }
 
@@ -76,7 +76,7 @@ final class TranslationLoader
         $normalized = [];
 
         foreach ($paths as $name => $path) {
-            if (!is_string($name) || $name === '' || !is_string($path) || $path === '' || !is_dir($path)) {
+            if ($name === '' || $path === '' || !is_dir($path)) {
                 continue;
             }
 

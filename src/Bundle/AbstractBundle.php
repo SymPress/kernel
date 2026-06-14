@@ -151,6 +151,7 @@ abstract class AbstractBundle implements BundleInterface, ConfigurableExtensionI
     ): void {
     }
 
+    /** @param array<string, mixed> $config */
     public function loadExtension(
         array $config,
         ContainerConfigurator $configurator,
@@ -190,6 +191,7 @@ abstract class AbstractBundle implements BundleInterface, ConfigurableExtensionI
             );
         }
 
+        // @phpstan-ignore new.internalClass, method.internalClass
         $this->extension = new BundleExtension($this, $this->extensionAlias);
 
         return $this->extension;

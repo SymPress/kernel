@@ -12,7 +12,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Alias;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainerInterface;
 use Symfony\Component\DependencyInjection\Reference;
 
@@ -95,13 +94,13 @@ final class DebugContainerCommand extends Command
             $ids = $runtimeContainer->getServiceIds();
             sort($ids);
 
-            return array_values($ids);
+            return $ids;
         }
 
         $ids = $this->container->builder()->getServiceIds();
         sort($ids);
 
-        return array_values($ids);
+        return $ids;
     }
 
     /** @return list<string> */
@@ -112,7 +111,7 @@ final class DebugContainerCommand extends Command
         sort($ids);
 
         if (!$types && !$showArguments) {
-            return array_values($ids);
+            return $ids;
         }
 
         return array_map(
@@ -178,14 +177,10 @@ final class DebugContainerCommand extends Command
     {
         $builder = $this->container->builder();
 
-        if (!$builder instanceof ContainerBuilder) {
-            return [];
-        }
-
         $parameters = array_keys($builder->getParameterBag()->all());
         sort($parameters);
 
-        return array_values($parameters);
+        return $parameters;
     }
 
     /** @return list<string> */
