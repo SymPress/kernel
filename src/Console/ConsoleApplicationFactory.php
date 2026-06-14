@@ -18,7 +18,7 @@ final readonly class ConsoleApplicationFactory
 
     public function create(): Application
     {
-        $application = new Application('SymPress Console', $this->kernel->getEnvironment());
+        $application = new KernelConsoleApplication($this->kernel);
         $application->setAutoExit(false);
         $application->setCommandLoader($this->commandLoader);
 
