@@ -13,6 +13,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 return static function (ContainerConfigurator $container): void {
     $parameters = $container->parameters();
     $parameters->set('kernel.package_prefixes', []);
+    $parameters->set('kernel.package_manager.enabled', false);
 
     $services = $container->services();
     $services->defaults()
@@ -29,6 +30,7 @@ return static function (ContainerConfigurator $container): void {
         ->public();
 
     $services->set(PackageManagerPage::class)
+        ->arg('$enabled', '%kernel.package_manager.enabled%')
         ->tag(
             'kernel.hook',
             [

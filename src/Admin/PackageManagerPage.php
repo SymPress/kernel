@@ -20,11 +20,16 @@ final class PackageManagerPage
 
     public function __construct(
         private readonly PackageDiscovery $packages,
+        private readonly bool $enabled = false,
     ) {
     }
 
     public function register(): void
     {
+        if (!$this->enabled) {
+            return;
+        }
+
         if (!function_exists('add_menu_page')) {
             return;
         }
@@ -39,7 +44,7 @@ final class PackageManagerPage
             self::MENU_POSITION,
         );
 
-        if (!is_string($hook) || $hook === '') {
+        if ($hook === '') {
             return;
         }
 
@@ -720,7 +725,7 @@ final class PackageManagerPage
                 continue;
             }
 
-            if (method_exists($theme, 'exists') && !$theme->exists()) {
+            if (!$theme->exists()) {
                 continue;
             }
 
@@ -774,6 +779,13 @@ final class PackageManagerPage
 
     private function deleteSymlinkPackage(PackageMetadata $package): ?\WP_Error
     {
+        if (!$this->isManagedSymlinkPackage($package)) {
+            return new \WP_Error(
+                'kernel_package_unmanaged_symlink',
+                __('Only managed WordPress package symlinks can be deleted here.', 'sympress-kernel'),
+            );
+        }
+
         $this->beforeSymlinkDelete($package);
         $deleted = @unlink($package->path());
         $this->afterSymlinkDelete($package, $deleted);
@@ -805,10 +817,16 @@ final class PackageManagerPage
                 uninstall_plugin($package->entry());
             }
 
-            do_action('delete_plugin', $package->entry());
+            if (function_exists('do_action')) {
+                do_action('delete_plugin', $package->entry());
+            }
         }
 
         if (!$package->isTheme()) {
+            return;
+        }
+
+        if (!function_exists('do_action')) {
             return;
         }
 
@@ -817,11 +835,11 @@ final class PackageManagerPage
 
     private function afterSymlinkDelete(PackageMetadata $package, bool $deleted): void
     {
-        if ($package->isPlugin()) {
+        if ($package->isPlugin() && function_exists('do_action')) {
             do_action('deleted_plugin', $package->entry(), $deleted);
         }
 
-        if (!$package->isTheme()) {
+        if (!$package->isTheme() || !function_exists('do_action')) {
             return;
         }
 
@@ -846,6 +864,10 @@ final class PackageManagerPage
 
     private function canRun(string $action, PackageMetadata $package): bool
     {
+        if (!$this->fileModificationsAllowed($package)) {
+            return false;
+        }
+
         if ($action === 'delete') {
             if ($package->isTheme()) {
                 return current_user_can('delete_themes');
@@ -869,6 +891,76 @@ final class PackageManagerPage
         return $action === 'activate'
             && $package->isPlugin()
             && current_user_can('activate_plugins');
+    }
+
+    private function fileModificationsAllowed(PackageMetadata $package): bool
+    {
+        $context = $package->isTheme() ? 'themes' : 'plugins';
+
+        if (function_exists('wp_is_file_mod_allowed')) {
+            return wp_is_file_mod_allowed($context);
+        }
+
+        return !defined('DISALLOW_FILE_MODS') || !constant('DISALLOW_FILE_MODS');
+    }
+
+    private function isManagedSymlinkPackage(PackageMetadata $package): bool
+    {
+        $root = $package->isTheme() ? $this->themeRootDirectory() : $this->pluginRootDirectory();
+        $entryRoot = $this->entryRoot($package->entry());
+
+        if ($root === null || $entryRoot === '') {
+            return false;
+        }
+
+        return $this->normalizePath($package->path()) === $this->normalizePath(sprintf('%s/%s', $root, $entryRoot));
+    }
+
+    private function entryRoot(string $entry): string
+    {
+        $parts = array_values(
+            array_filter(
+                explode('/', str_replace('\\', '/', $entry)),
+                static fn (string $part): bool => $part !== '',
+            ),
+        );
+
+        return $parts[0] ?? '';
+    }
+
+    private function pluginRootDirectory(): ?string
+    {
+        if (defined('WP_PLUGIN_DIR')) {
+            return (string) WP_PLUGIN_DIR;
+        }
+
+        if (defined('WP_CONTENT_DIR')) {
+            return sprintf('%s/plugins', rtrim((string) WP_CONTENT_DIR, '/'));
+        }
+
+        return null;
+    }
+
+    private function themeRootDirectory(): ?string
+    {
+        if (function_exists('get_theme_root')) {
+            $themeRoot = get_theme_root();
+
+            if ($themeRoot !== '') {
+                return $themeRoot;
+            }
+        }
+
+        if (defined('WP_CONTENT_DIR')) {
+            return sprintf('%s/themes', rtrim((string) WP_CONTENT_DIR, '/'));
+        }
+
+        return null;
+    }
+
+    private function normalizePath(string $path): string
+    {
+        return rtrim(str_replace('\\', '/', $path), '/');
     }
 
     private function hasBulkAction(PackageMetadata $package): bool
