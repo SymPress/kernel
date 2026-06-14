@@ -52,12 +52,42 @@ final class ContainerTest extends TestCase
         self::assertSame($app, $container->get(Container::APP_ID));
     }
 
+    public function testWithSiteConfigUsesIndependentBuilder(): void
+    {
+        $container = $this->container();
+        $configured = $container->withSiteConfig($this->siteConfig('production'));
+
+        $configured->setParameter('demo.value', 'configured');
+
+        self::assertSame('test', $container->getParameter('kernel.environment'));
+        self::assertSame('production', $configured->getParameter('kernel.environment'));
+        self::assertFalse($container->hasParameter('demo.value'));
+        self::assertSame('configured', $configured->getParameter('demo.value'));
+    }
+
+    public function testParametersCannotBeMutatedAfterRuntimeContainerIsAttached(): void
+    {
+        $container = $this->container();
+        $container->useRuntimeContainer(new RuntimeContainer());
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Cannot set parameter');
+
+        $container->setParameter('demo.value', 'late');
+    }
+
     private function container(): Container
     {
+        return new Container($this->siteConfig(), WpContext::new()->force(WpContext::CORE));
+    }
+
+    private function siteConfig(string $environment = 'test'): SiteConfig
+    {
         $locations = $this->createMock(Locations::class);
-        $config = new class ($locations) implements SiteConfig {
+        return new class ($locations, $environment) implements SiteConfig {
             public function __construct(
                 private readonly Locations $locations,
+                private readonly string $environment,
             ) {
             }
 
@@ -78,7 +108,7 @@ final class ContainerTest extends TestCase
 
             public function env(): string
             {
-                return 'test';
+                return $this->environment;
             }
 
             public function envIs(string $env): bool
@@ -96,8 +126,6 @@ final class ContainerTest extends TestCase
                 return [];
             }
         };
-
-        return new Container($config, WpContext::new()->force(WpContext::CORE));
     }
 }
 

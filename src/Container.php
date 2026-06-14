@@ -20,7 +20,7 @@ final class Container implements SymfonyContainerInterface
     public const string CONTEXT_ID = 'kernel.context';
     public const string KERNEL_ID = 'kernel.kernel';
 
-    private readonly ContainerBuilder $builder;
+    private ContainerBuilder $builder;
     private ?PsrContainerInterface $runtimeContainer = null;
     private ?App $app = null;
     private ?KernelInterface $kernel = null;
@@ -45,12 +45,38 @@ final class Container implements SymfonyContainerInterface
     private SiteConfig $config;
     private WpContext $context;
 
+    public function __clone(): void
+    {
+        $this->runtimeContainer = null;
+        $kernel = $this->kernel;
+        $app = $this->app;
+        $this->kernel = null;
+        $this->app = null;
+        $this->builder = new ContainerBuilder();
+        $this->bootstrapBuilder();
+
+        if ($kernel instanceof KernelInterface) {
+            $this->setKernel($kernel);
+        }
+
+        if (!$app instanceof App) {
+            return;
+        }
+
+        $this->setApp($app);
+    }
+
     public function withSiteConfig(SiteConfig $config): self
     {
-        $instance = clone $this;
-        $instance->config = $config;
-        $instance->builder->setParameter('kernel.environment', $config->env());
-        $instance->hydrateBuilder();
+        $instance = new self($config, $this->context, null, ...$this->containers);
+
+        if ($this->kernel instanceof KernelInterface) {
+            $instance->setKernel($this->kernel);
+        }
+
+        if ($this->app instanceof App) {
+            $instance->setApp($this->app);
+        }
 
         return $instance;
     }
@@ -209,6 +235,7 @@ final class Container implements SymfonyContainerInterface
         return false;
     }
 
+    /** @return array<mixed>|bool|string|int|float|\UnitEnum|null */
     public function getParameter(string $name): array|bool|string|int|float|\UnitEnum|null
     {
         if ($this->runtimeContainer instanceof SymfonyContainerInterface) {
@@ -231,8 +258,15 @@ final class Container implements SymfonyContainerInterface
         return $this->builder->hasParameter($name);
     }
 
+    /** @param array<mixed>|bool|string|int|float|\UnitEnum|null $value */
     public function setParameter(string $name, array|bool|string|int|float|\UnitEnum|null $value): void
     {
+        if ($this->runtimeContainer instanceof PsrContainerInterface) {
+            throw new \LogicException(
+                sprintf('Cannot set parameter "%s" after the runtime container is in use.', $name),
+            );
+        }
+
         $this->builder->setParameter($name, $value);
     }
 
@@ -289,6 +323,7 @@ final class Container implements SymfonyContainerInterface
     private function setSyntheticService(PsrContainerInterface $container, string $id, object $service): void
     {
         try {
+            // @phpstan-ignore method.notFound
             $container->set($id, $service);
         } catch (ServiceNotFoundException) {
         }
@@ -301,6 +336,7 @@ final class Container implements SymfonyContainerInterface
     ): ?object {
 
         if ($container instanceof SymfonyContainerInterface) {
+            // @phpstan-ignore argument.type, argument.templateType
             return $container->get($id, $invalidBehavior);
         }
 
@@ -319,7 +355,7 @@ final class Container implements SymfonyContainerInterface
         );
     }
 
-    private function handleMissingService(string $id, int $invalidBehavior): ?object
+    private function handleMissingService(string $id, int $invalidBehavior): null
     {
         if (
             in_array(
