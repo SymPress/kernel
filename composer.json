@@ -24,6 +24,8 @@
         "symfony/event-dispatcher": "^8.0",
         "symfony/expression-language": "^8.0",
         "symfony/filesystem": "^8.0",
+        "symfony/http-foundation": "^8.1",
+        "symfony/http-kernel": "^8.1",
         "symfony/service-contracts": "^3.6",
         "symfony/yaml": "^8.0"
     },
