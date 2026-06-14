@@ -47,7 +47,7 @@ use Symfony\Component\DependencyInjection\Compiler\ResettableServicePass;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\EnvVarProcessorInterface;
-use Symfony\Component\DependencyInjection\Kernel\KernelInterface as SymfonyKernelInterface;
+use Symfony\Component\DependencyInjection\Kernel\KernelInterface as DependencyInjectionKernelInterface;
 use Symfony\Component\DependencyInjection\Loader\ClosureLoader;
 use Symfony\Component\DependencyInjection\Loader\DirectoryLoader;
 use Symfony\Component\DependencyInjection\Loader\GlobFileLoader;
@@ -63,6 +63,10 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\DependencyInjection\ServicesResetter;
 use Symfony\Component\DependencyInjection\ServicesResetterInterface;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\HttpKernel\KernelInterface as SymfonyKernelInterface;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Service\ServiceSubscriberInterface;
 
@@ -153,6 +157,11 @@ abstract class AbstractKernel implements KernelInterface
         return $this->debug;
     }
 
+    public function getCharset(): string
+    {
+        return 'UTF-8';
+    }
+
     public function getCacheDir(): string
     {
         $dir = $this->serverString('APP_CACHE_DIR');
@@ -240,6 +249,29 @@ abstract class AbstractKernel implements KernelInterface
         throw new \InvalidArgumentException(
             sprintf('Bundle "%s" does not exist or it is not enabled.', $name),
         );
+    }
+
+    public function registerBundles(): iterable
+    {
+        return $this->getBundles();
+    }
+
+    public function registerContainerConfiguration(LoaderInterface $loader): void
+    {
+    }
+
+    public function handle(
+        Request $request,
+        int $type = HttpKernelInterface::MAIN_REQUEST,
+        bool $catch = true,
+    ): Response {
+        $httpKernel = $this->getContainer()->get('http_kernel');
+
+        if (!$httpKernel instanceof HttpKernelInterface) {
+            throw new \LogicException('The "http_kernel" service is not available.');
+        }
+
+        return $httpKernel->handle($request, $type, $catch);
     }
 
     public function locateResource(string $name): string
@@ -1182,6 +1214,8 @@ abstract class AbstractKernel implements KernelInterface
         }
 
         $builder->setAlias(SymfonyKernelInterface::class, Container::KERNEL_ID)
+            ->setPublic(true);
+        $builder->setAlias(DependencyInjectionKernelInterface::class, Container::KERNEL_ID)
             ->setPublic(true);
 
         $this->registerFilesystemService($builder);

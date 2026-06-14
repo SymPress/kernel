@@ -8,7 +8,7 @@ use SymPress\Kernel\Bundle\BundleInterface;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Container;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\Kernel\KernelInterface as SymfonyKernelInterface;
+use Symfony\Component\HttpKernel\KernelInterface as SymfonyKernelInterface;
 
 interface KernelInterface extends SymfonyKernelInterface
 {
@@ -17,6 +17,8 @@ interface KernelInterface extends SymfonyKernelInterface
     public function getEnvironment(): string;
 
     public function isDebug(): bool;
+
+    public function getCharset(): string;
 
     public function getCacheDir(): string;
 

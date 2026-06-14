@@ -69,6 +69,11 @@ abstract class AbstractBundle implements BundleInterface, ConfigurableExtensionI
         return $this->name;
     }
 
+    public function getNamespace(): string
+    {
+        return (new \ReflectionObject($this))->getNamespaceName();
+    }
+
     public function configPath(): ?string
     {
         return $this->configPaths()[0] ?? null;

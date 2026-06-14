@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SymPress\Kernel\Bundle;
 
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\Kernel\BundleInterface as SymfonyBundleInterface;
+use Symfony\Component\HttpKernel\Bundle\BundleInterface as SymfonyBundleInterface;
 
 interface BundleInterface extends SymfonyBundleInterface
 {

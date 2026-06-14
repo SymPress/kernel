@@ -10,7 +10,11 @@ use SymPress\Kernel\Container;
 use SymPress\Kernel\Kernel\KernelInterface;
 use SymPress\Kernel\Tests\Support\TestSiteConfig;
 use SymPress\Kernel\WpContext;
+use Symfony\Component\Config\Loader\LoaderInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 final class LifecycleKernel implements KernelInterface
 {
@@ -34,6 +38,11 @@ final class LifecycleKernel implements KernelInterface
     public function isDebug(): bool
     {
         return false;
+    }
+
+    public function getCharset(): string
+    {
+        return 'UTF-8';
     }
 
     public function getCacheDir(): string
@@ -79,6 +88,23 @@ final class LifecycleKernel implements KernelInterface
     public function getBundle(string $name): BundleInterface
     {
         throw new \InvalidArgumentException(sprintf('Bundle "%s" does not exist or it is not enabled.', $name));
+    }
+
+    public function registerBundles(): iterable
+    {
+        return [];
+    }
+
+    public function registerContainerConfiguration(LoaderInterface $loader): void
+    {
+    }
+
+    public function handle(
+        Request $request,
+        int $type = HttpKernelInterface::MAIN_REQUEST,
+        bool $catch = true,
+    ): Response {
+        return new Response();
     }
 
     public function locateResource(string $name): string
