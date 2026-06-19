@@ -8,4 +8,15 @@ where applicable.
 
 ## Unreleased
 
-- Initial SymPress Kernel package documentation.
+### Added
+
+- Bridge `App::enableDebug()` and `App::disableDebug()` to an optional profiler service.
+
+### Changed
+
+- Split package-manager actions, package-manager rendering, kernel configuration, runtime container cache, and core service registration into focused collaborators.
+- Adopt shared SymPress QA tooling and PHP 8.5 package constraints.
+
+### Fixed
+
+- Normalize mixed metadata, route, hook, environment, and WordPress context inputs before using them as typed kernel state.
