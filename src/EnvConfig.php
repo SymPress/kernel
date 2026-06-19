@@ -144,12 +144,16 @@ class EnvConfig implements SiteConfig
             ?? $this->readEnvVarOrConstant('VIP_GO_APP_ENVIRONMENT')
             ?? $this->readEnvVarOrConstant('VIP_GO_ENV');
 
-        if ($env !== null) {
+        if (is_scalar($env) || $env instanceof \Stringable) {
             return $this->normalizeEnv((string) $env, false);
         }
 
         if (function_exists('is_wpe')) {
-            $env = (int) is_wpe() > 0 ? self::PRODUCTION : self::STAGING;
+            $isWpe = is_wpe();
+            $env = (is_bool($isWpe) && $isWpe)
+                || (is_numeric($isWpe) && (int) $isWpe > 0)
+                    ? self::PRODUCTION
+                    : self::STAGING;
             $this->env = $this->normalizeEnv($env, true);
 
             return $this->env;

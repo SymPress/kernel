@@ -24,6 +24,8 @@ final class Container implements SymfonyContainerInterface
     private ?PsrContainerInterface $runtimeContainer = null;
     private ?App $app = null;
     private ?KernelInterface $kernel = null;
+    private SiteConfig $config;
+    private WpContext $context;
 
     /** @var array<int, PsrContainerInterface> */
     private array $containers;
@@ -38,12 +40,9 @@ final class Container implements SymfonyContainerInterface
         $this->config = $config ?? new EnvConfig();
         $this->context = $context ?? WpContext::new()->force(WpContext::CORE);
         $this->builder = $builder ?? new ContainerBuilder();
-        $this->containers = $containers;
+        $this->containers = array_values($containers);
         $this->bootstrapBuilder();
     }
-
-    private SiteConfig $config;
-    private WpContext $context;
 
     public function __clone(): void
     {

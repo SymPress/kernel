@@ -29,6 +29,11 @@ final class HookCompilerPass implements CompilerPassInterface
             $serviceMap[$id] = new Reference($id);
 
             foreach ($definition->getTag(HookLoader::TAG) as $attributes) {
+                if (!is_array($attributes)) {
+                    continue;
+                }
+
+                $attributes = $this->stringKeyMap($attributes);
                 $method = $this->optionalStringAttribute($attributes, 'method', '__invoke');
                 $this->validateHookMethod($container, $id, $definition->getClass(), $method);
 
@@ -172,6 +177,25 @@ final class HookCompilerPass implements CompilerPassInterface
         throw new InvalidArgumentException(
             sprintf('Hook method "%s::%s" must be public.', $reflectionMethod->class, $method),
         );
+    }
+
+    /**
+     * @param array<mixed, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function stringKeyMap(array $values): array
+    {
+        $map = [];
+
+        foreach ($values as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            $map[$key] = $value;
+        }
+
+        return $map;
     }
 
     private function reflectHookMethod(

@@ -23,28 +23,32 @@ final class VipLocations implements Locations
     private function __construct(EnvConfig $config)
     {
         $baseResolver = new LocationResolver($config);
-        $contentUrl = $baseResolver->resolveUrl(self::CONTENT);
-        $contentDir = $baseResolver->resolveDir(self::CONTENT);
+        $contentUrl = $baseResolver->resolveUrl(self::CONTENT) ?? '';
+        $contentDir = $baseResolver->resolveDir(self::CONTENT) ?? '';
         $privateDir = defined('WPCOM_VIP_PRIVATE_DIR')
-            ? trailingslashit(wp_normalize_path((string) WPCOM_VIP_PRIVATE_DIR))
+            ? trailingslashit(wp_normalize_path($this->constantString('WPCOM_VIP_PRIVATE_DIR')))
             : null;
         $clientMuDir = defined('WPCOM_VIP_CLIENT_MU_PLUGIN_DIR')
-            ? trailingslashit(wp_normalize_path((string) WPCOM_VIP_CLIENT_MU_PLUGIN_DIR))
+            ? trailingslashit(wp_normalize_path($this->constantString('WPCOM_VIP_CLIENT_MU_PLUGIN_DIR')))
             : sprintf('%sclient-mu-plugins/', $contentDir);
         $clientMuUrl = sprintf('%sclient-mu-plugins/', $contentUrl);
-        $abspath = trailingslashit(wp_normalize_path((string) ABSPATH));
+        $abspath = trailingslashit(wp_normalize_path($this->constantString('ABSPATH')));
+        $directories = [
+            self::IMAGES            => sprintf('%simages/', $contentDir),
+            self::CLIENT_MU_PLUGINS => $clientMuDir,
+            self::VENDOR            => sprintf('%svendor/', $clientMuDir),
+            self::VIP_CONFIG        => sprintf('%svip-config/', $abspath),
+        ];
+
+        if ($privateDir !== null) {
+            $directories[self::PRIVATE] = $privateDir;
+        }
 
         $this->injectResolver(
             new LocationResolver(
                 $config,
                 [
-                    LocationResolver::DIR => [
-                        self::IMAGES            => sprintf('%simages/', $contentDir),
-                        self::CLIENT_MU_PLUGINS => $clientMuDir,
-                        self::VENDOR            => sprintf('%svendor/', $clientMuDir),
-                        self::PRIVATE           => $privateDir,
-                        self::VIP_CONFIG        => sprintf('%svip-config/', $abspath),
-                    ],
+                    LocationResolver::DIR => $directories,
                     LocationResolver::URL => [
                         self::IMAGES            => sprintf('%simages', $contentUrl),
                         self::CLIENT_MU_PLUGINS => $clientMuUrl,
@@ -53,6 +57,21 @@ final class VipLocations implements Locations
                 ],
             ),
         );
+    }
+
+    private function constantString(string $name): string
+    {
+        if (!defined($name)) {
+            return '';
+        }
+
+        $value = constant($name);
+
+        if (is_scalar($value) || $value instanceof \Stringable) {
+            return (string) $value;
+        }
+
+        return '';
     }
 
     public function clientMuPluginsDir(string $path = '/'): ?string
