@@ -31,8 +31,7 @@
         "symfony/yaml": "^8.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^11.5",
-        "sympress/coding-standards": "dev-main"
+        "sympress/qa": "dev-main"
     },
     "autoload": {
         "psr-4": {
@@ -55,24 +54,33 @@
     "scripts": {
         "cs": [
             "Composer\\Config::disableProcessTimeout",
-            "phpcs --standard=phpcs.xml.dist"
+            "qa cs"
         ],
         "cs:fix": [
             "Composer\\Config::disableProcessTimeout",
-            "phpcbf --standard=phpcs.xml.dist"
+            "qa cs:fix"
+        ],
+        "static-analysis": [
+            "Composer\\Config::disableProcessTimeout",
+            "qa static-analysis"
         ],
         "tests": [
             "Composer\\Config::disableProcessTimeout",
-            "phpunit --configuration phpunit.xml.dist --no-coverage"
+            "qa tests"
+        ],
+        "test": [
+            "@tests"
         ],
         "qa": [
             "@cs",
+            "@static-analysis",
             "@tests"
         ]
     },
     "config": {
         "allow-plugins": {
-            "dealerdirect/phpcodesniffer-composer-installer": true
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "phpstan/extension-installer": true
         },
         "sort-packages": true
     },

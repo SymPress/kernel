@@ -15,6 +15,7 @@
 
     <exclude-pattern>vendor/*</exclude-pattern>
     <exclude-pattern>.phpunit.cache/*</exclude-pattern>
+    <exclude-pattern>tests/Support/TestEnvironment.php</exclude-pattern>
 
     <rule ref="SymPress-Pure">
         <exclude name="Generic.Files.OneObjectStructurePerFile.MultipleFound" />
@@ -55,5 +56,9 @@
                 <element value="SymPress\Kernel\Tests\RuntimeContainer" />
             </property>
         </properties>
+    </rule>
+
+    <rule ref="SymPress.Classes.ClassLength">
+        <exclude-pattern>tests/*</exclude-pattern>
     </rule>
 </ruleset>
