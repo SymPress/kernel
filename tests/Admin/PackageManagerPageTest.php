@@ -137,6 +137,7 @@ namespace {
 
 namespace SymPress\Kernel\Tests\Admin {
     use PHPUnit\Framework\TestCase;
+    use SymPress\Kernel\Admin\PackageManagerActions;
     use SymPress\Kernel\Admin\PackageManagerPage;
     use SymPress\Kernel\Package\PackageDiscovery;
     use SymPress\Kernel\Package\PackageMetadata;
@@ -214,7 +215,7 @@ namespace SymPress\Kernel\Tests\Admin {
             rmdir($link);
             symlink($target, $link);
 
-            $result = $this->invokePageMethod('deleteSymlinkPackage', $this->pluginPackage($link));
+            $result = $this->invokeActionMethod('deleteSymlinkPackage', $this->pluginPackage($link));
 
             self::assertInstanceOf(\WP_Error::class, $result);
             self::assertSame('kernel_package_unmanaged_symlink', $result->get_error_code());
@@ -235,7 +236,7 @@ namespace SymPress\Kernel\Tests\Admin {
             $this->paths[] = $contentDir;
             symlink($target, $link);
 
-            $result = $this->invokePageMethod('deleteSymlinkPackage', $this->pluginPackage($link));
+            $result = $this->invokeActionMethod('deleteSymlinkPackage', $this->pluginPackage($link));
 
             self::assertNull($result);
             self::assertFalse(is_link($link));
@@ -271,6 +272,13 @@ namespace SymPress\Kernel\Tests\Admin {
             $reflection = new \ReflectionMethod(PackageManagerPage::class, $method);
 
             return $reflection->invoke($this->page(true), ...$arguments);
+        }
+
+        private function invokeActionMethod(string $method, mixed ...$arguments): mixed
+        {
+            $reflection = new \ReflectionMethod(PackageManagerActions::class, $method);
+
+            return $reflection->invoke(new PackageManagerActions(), ...$arguments);
         }
 
         private function tmpPath(string $prefix): string
