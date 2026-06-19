@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel;
 
-use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Hook\HookLoader;
 use SymPress\Kernel\Kernel\KernelInterface;
 use SymPress\Kernel\Kernel\SiteKernel;
@@ -24,9 +23,9 @@ final class App
     private static ?self $app = null;
 
     private ?Container $container = null;
-    private ?BundleRegistry $bundles = null;
     private bool $booted = false;
     private bool $booting = false;
+    private ?bool $debugEnabled = null;
 
     private function __construct(
         private readonly KernelInterface $kernel,
@@ -96,11 +95,17 @@ final class App
 
     public function enableDebug(): self
     {
+        $this->debugEnabled = true;
+        $this->applyDebugState();
+
         return $this;
     }
 
     public function disableDebug(): self
     {
+        $this->debugEnabled = false;
+        $this->applyDebugState();
+
         return $this;
     }
 
@@ -122,43 +127,43 @@ final class App
 
             $this->booting = true;
             self::dispatchAction(self::ACTION_BOOTING, $this->kernel);
-            $this->initializeContainer();
-            $this->bundles = $this->kernel->discoverBundles();
+            $container = $this->initializeContainer();
+            $bundles = $this->kernel->discoverBundles();
 
-            if (!$this->kernel->tryUseRuntimeContainer($this->container, $this->bundles)) {
-                self::dispatchAction(self::ACTION_BEFORE_CONTAINER_BUILD, $this->container, $this->bundles);
+            if (!$this->kernel->tryUseRuntimeContainer($container, $bundles)) {
+                self::dispatchAction(self::ACTION_BEFORE_CONTAINER_BUILD, $container, $bundles);
                 self::dispatchAction(self::LEGACY_ACTION_BEFORE_CONTAINER_BUILD);
                 $loadedConfigFiles = $this->kernel->configureContainer(
-                    $this->container->builder(),
-                    $this->container,
-                    $this->bundles,
+                    $container->builder(),
+                    $container,
+                    $bundles,
                 );
                 self::dispatchAction(
                     self::ACTION_CONTAINER_CONFIGURED,
-                    $this->container,
-                    $this->bundles,
+                    $container,
+                    $bundles,
                     $loadedConfigFiles,
                 );
                 $this->kernel->createRuntimeContainer(
-                    $this->container,
-                    $this->bundles,
+                    $container,
+                    $bundles,
                     $loadedConfigFiles,
                 );
             }
 
-            self::dispatchAction(self::ACTION_CONTAINER_READY, $this->container, $this->bundles);
-            self::dispatchAction(self::LEGACY_ACTION_CONTAINER_READY, $this->container);
+            self::dispatchAction(self::ACTION_CONTAINER_READY, $container, $bundles);
+            self::dispatchAction(self::LEGACY_ACTION_CONTAINER_READY, $container);
+            $this->applyDebugState();
             $this->registerHooks();
-            $this->kernel->boot($this->container, $this->bundles);
+            $this->kernel->boot($container, $bundles);
             $this->booted = true;
             $this->booting = false;
-            self::dispatchAction(self::ACTION_BOOTED, $this->container, $this->bundles);
-            self::dispatchAction(self::LEGACY_ACTION_CONTAINER_LOADED, $this->container);
+            self::dispatchAction(self::ACTION_BOOTED, $container, $bundles);
+            self::dispatchAction(self::LEGACY_ACTION_CONTAINER_LOADED, $container);
         } catch (\Throwable $throwable) {
             $this->booted = false;
             $this->booting = false;
             $this->container = null;
-            $this->bundles = null;
             self::handleThrowable($throwable);
             throw $throwable;
         }
@@ -173,9 +178,9 @@ final class App
                 throw new \DomainException("Can't resolve from an uninitialised application.");
             }
 
-            $this->initializeContainer();
+            $container = $this->initializeContainer();
 
-            if (!$this->container->has($id)) {
+            if (!$container->has($id)) {
                 if (function_exists('do_action')) {
                     do_action(
                         self::ACTION_ERROR,
@@ -186,7 +191,7 @@ final class App
                 return $default;
             }
 
-            $value = $this->container->get($id);
+            $value = $container->get($id);
         } catch (\Throwable $throwable) {
             self::handleThrowable($throwable);
         }
@@ -194,14 +199,17 @@ final class App
         return $value;
     }
 
-    private function initializeContainer(): void
+    private function initializeContainer(): Container
     {
         if ($this->container instanceof Container) {
-            return;
+            return $this->container;
         }
 
-        $this->container = $this->kernel->createContainer();
-        $this->container->setApp($this);
+        $container = $this->kernel->createContainer();
+        $container->setApp($this);
+        $this->container = $container;
+
+        return $container;
     }
 
     private function registerHooks(): void
@@ -217,6 +225,26 @@ final class App
         }
 
         $hookLoader->register();
+    }
+
+    private function applyDebugState(): void
+    {
+        if (
+            !$this->container instanceof Container
+            || $this->debugEnabled === null
+            || !$this->container->has('profiler')
+        ) {
+            return;
+        }
+
+        $profiler = $this->container->get('profiler');
+        $method = $this->debugEnabled ? 'enable' : 'disable';
+
+        if (!is_object($profiler) || !method_exists($profiler, $method)) {
+            return;
+        }
+
+        $profiler->{$method}();
     }
 
     private static function defaultProjectDir(): string
@@ -257,7 +285,7 @@ final class App
 
     private static function dispatchAction(string $action, mixed ...$arguments): void
     {
-        if (!function_exists('do_action')) {
+        if ($action === '' || !function_exists('do_action')) {
             return;
         }
 

@@ -169,6 +169,37 @@ namespace SymPress\Kernel\Tests\Kernel {
             );
         }
 
+        public function testDebugMethodsBridgeToOptionalProfilerService(): void
+        {
+            $profiler = new class {
+                public bool $enabled = false;
+                public bool $disabled = false;
+
+                public function enable(): void
+                {
+                    $this->enabled = true;
+                    $this->disabled = false;
+                }
+
+                public function disable(): void
+                {
+                    $this->disabled = true;
+                    $this->enabled = false;
+                }
+            };
+
+            $app = App::new(new LifecycleKernel($this->tmpPath('debug-project'), $profiler));
+            $app->enableDebug()->boot();
+
+            self::assertTrue($profiler->enabled);
+            self::assertFalse($profiler->disabled);
+
+            $app->disableDebug();
+
+            self::assertFalse($profiler->enabled);
+            self::assertTrue($profiler->disabled);
+        }
+
         public function testKernelBootRethrowsErrorsAfterDispatchingErrorAction(): void
         {
             $kernel = new class (

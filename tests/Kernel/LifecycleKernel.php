@@ -22,6 +22,7 @@ final class LifecycleKernel implements KernelInterface
 
     public function __construct(
         private readonly string $projectDir,
+        private readonly ?object $profiler = null,
     ) {
     }
 
@@ -136,6 +137,9 @@ final class LifecycleKernel implements KernelInterface
         Container $container,
         BundleRegistry $bundles,
     ): array {
+        if ($this->profiler !== null) {
+            $builder->set('profiler', $this->profiler);
+        }
 
         return [];
     }
