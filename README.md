@@ -36,7 +36,7 @@ Then it adds the Symfony patterns that pay off in larger codebases:
 
 ## Requirements
 
-- PHP `>=8.4.1`
+- PHP `^8.5`
 - Composer
 - WordPress
 - Symfony DependencyInjection `^8.1`, Config, Console, Filesystem, Routing,
