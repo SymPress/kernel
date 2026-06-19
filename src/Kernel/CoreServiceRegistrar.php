@@ -46,7 +46,7 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\DependencyInjection\ServicesResetter;
 use Symfony\Component\DependencyInjection\ServicesResetterInterface;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\HttpKernel\KernelInterface as SymfonyKernelInterface;
+use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Service\ServiceSubscriberInterface;
 
@@ -98,7 +98,7 @@ final class CoreServiceRegistrar
             $builder->setAlias('kernel', Container::KERNEL_ID)->setPublic(true);
         }
 
-        $builder->setAlias(SymfonyKernelInterface::class, Container::KERNEL_ID)
+        $builder->setAlias(HttpKernelInterface::class, Container::KERNEL_ID)
             ->setPublic(true);
         $builder->setAlias(DependencyInjectionKernelInterface::class, Container::KERNEL_ID)
             ->setPublic(true);

@@ -7,10 +7,12 @@ namespace SymPress\Kernel\Kernel;
 use SymPress\Kernel\Bundle\BundleInterface;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Container;
+use Symfony\Component\Config\Loader\LoaderInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\HttpKernel\KernelInterface as SymfonyKernelInterface;
+use Symfony\Component\DependencyInjection\Kernel\KernelInterface as SymfonyKernelInterface;
+use Symfony\Component\HttpKernel\HttpKernelInterface;
 
-interface KernelInterface extends SymfonyKernelInterface
+interface KernelInterface extends HttpKernelInterface, SymfonyKernelInterface
 {
     public function getProjectDir(): string;
 
@@ -36,6 +38,11 @@ interface KernelInterface extends SymfonyKernelInterface
     public function getBundles(): array;
 
     public function getBundle(string $name): BundleInterface;
+
+    /** @return iterable<BundleInterface> */
+    public function registerBundles(): iterable;
+
+    public function registerContainerConfiguration(LoaderInterface $loader): void;
 
     public function locateResource(string $name): string;
 
