@@ -57,8 +57,4 @@
             </property>
         </properties>
     </rule>
-
-    <rule ref="SymPress.Classes.ClassLength">
-        <exclude-pattern>tests/*</exclude-pattern>
-    </rule>
 </ruleset>
