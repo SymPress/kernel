@@ -465,7 +465,6 @@ final readonly class PackageManagerPageView
 
     /**
      * @param list<PackageMetadata> $packages
-     *
      * @return array<string, int>
      */
     private function counts(array $packages): array
