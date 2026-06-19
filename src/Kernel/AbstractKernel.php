@@ -27,9 +27,9 @@ use Symfony\Component\DependencyInjection\Loader\GlobFileLoader;
 use Symfony\Component\DependencyInjection\Loader\IniFileLoader;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
+use Symfony\Component\DependencyInjection\Kernel\FileLocator;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Config\FileLocator;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 abstract class AbstractKernel implements KernelInterface
@@ -496,7 +496,7 @@ abstract class AbstractKernel implements KernelInterface
 
     private function containerLoader(ContainerBuilder $builder, string $currentDir): DelegatingLoader
     {
-        $locator = new FileLocator($this, $currentDir);
+        $locator = new FileLocator($this);
         $resolver = new LoaderResolver(
             [
                 new YamlFileLoader($builder, $locator, $this->environment),
