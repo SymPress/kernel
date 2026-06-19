@@ -107,11 +107,14 @@ final class LocationResolver
 
     private function resolve(string $location, string $dirOrUrl, ?string $subDir = null): ?string
     {
-        $envBase = (string) $this->config->get('WP_APP_' . strtoupper(sprintf('%s_%s', $location, $dirOrUrl)));
+        $configuredBase = $this->config->get('WP_APP_' . strtoupper(sprintf('%s_%s', $location, $dirOrUrl)));
+        $envBase = is_scalar($configuredBase) || $configuredBase instanceof \Stringable
+            ? (string) $configuredBase
+            : '';
 
         $base = $envBase !== ''
             ? ($dirOrUrl === self::DIR ? wp_normalize_path($envBase) : $envBase)
-            : ($this->locations[$dirOrUrl][$location] ?? null);
+            : $this->locations[$dirOrUrl][$location] ?? null;
 
         if ($base === null && array_key_exists($location, self::CONTENT_LOCATIONS)) {
             $contentBase = $this->resolve(Locations::CONTENT, $dirOrUrl);
@@ -147,7 +150,7 @@ final class LocationResolver
             return [];
         }
 
-        return $this->parseExtendedDefaults($locations);
+        return $this->parseExtendedDefaults($this->stringKeyMap($locations));
     }
 
     /**
@@ -177,5 +180,24 @@ final class LocationResolver
         }
 
         return array_filter($custom);
+    }
+
+    /**
+     * @param array<mixed, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function stringKeyMap(array $values): array
+    {
+        $map = [];
+
+        foreach ($values as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            $map[$key] = $value;
+        }
+
+        return $map;
     }
 }

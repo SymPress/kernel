@@ -15,13 +15,55 @@ use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 
+/**
+ * @phpstan-type RestRouteDefinition array{
+ *     namespace: string,
+ *     path: ?string,
+ *     args: array<string, array<string, mixed>>,
+ *     permission_callback: mixed,
+ *     public: bool,
+ *     show_in_index: ?bool,
+ *     override: bool
+ * }
+ * @phpstan-type CompiledRoute array{
+ *     name: string,
+ *     path: string,
+ *     methods: list<string>,
+ *     schemes: list<string>,
+ *     host: string,
+ *     defaults: array<string, mixed>,
+ *     requirements: array<string, string>,
+ *     options: array<string, mixed>,
+ *     condition: string,
+ *     priority: int,
+ *     service: string,
+ *     class: string,
+ *     method: string
+ * }
+ * @phpstan-type CompiledRestRoute array{
+ *     name: string,
+ *     path: string,
+ *     methods: list<string>,
+ *     schemes: list<string>,
+ *     host: string,
+ *     defaults: array<string, mixed>,
+ *     requirements: array<string, string>,
+ *     options: array<string, mixed>,
+ *     condition: string,
+ *     priority: int,
+ *     service: string,
+ *     class: string,
+ *     method: string,
+ *     rest: RestRouteDefinition
+ * }
+ */
 final class RouteLoader
 {
     public const string TAG = 'kernel.route_controller';
 
     /**
-     * @param list<array<string, mixed>> $routes
-     * @param list<array<string, mixed>> $restRoutes
+     * @param list<CompiledRoute> $routes
+     * @param list<CompiledRestRoute> $restRoutes
      */
     public function __construct(
         private readonly ContainerInterface $controllers,
@@ -56,7 +98,7 @@ final class RouteLoader
         );
 
         try {
-            $attributes = $matcher->matchRequest($request);
+            $attributes = $this->stringKeyMap($matcher->matchRequest($request));
         } catch (ResourceNotFoundException) {
             return null;
         } catch (MethodNotAllowedException $exception) {
@@ -82,6 +124,9 @@ final class RouteLoader
 
         foreach ($this->restRoutes as $route) {
             $rest = $route['rest'];
+            $namespace = $this->nonFalsyString($rest['namespace'], $route['name'], 'namespace');
+            $path = $this->nonFalsyString($this->restPath($route), $route['name'], 'path');
+
             $args = [
                 'methods'             => $route['methods'] === [] ? 'GET' : $route['methods'],
                 'callback'            => $this->restCallback($route),
@@ -94,8 +139,8 @@ final class RouteLoader
             }
 
             register_rest_route(
-                $rest['namespace'],
-                $this->restPath($route),
+                $namespace,
+                $path,
                 $args,
                 (bool) ($rest['override'] ?? false),
             );
@@ -123,7 +168,7 @@ final class RouteLoader
         return $collection;
     }
 
-    /** @return list<array<string, mixed>> */
+    /** @return list<CompiledRestRoute> */
     public function restRoutes(): array
     {
         return $this->restRoutes;
@@ -141,27 +186,38 @@ final class RouteLoader
 
         $service = $this->controllers->get($serviceId);
 
+        if (!is_object($service)) {
+            $routeName = $attributes['_route'] ?? $serviceId;
+            $routeName = is_scalar($routeName) || $routeName instanceof \Stringable ? (string) $routeName : $serviceId;
+
+            throw new \RuntimeException(sprintf('Route "%s" controller service is not an object.', $routeName));
+        }
+
         return $this->invokeController($service, $method, $request, $attributes);
     }
 
-    /** @param array<string, mixed> $route */
+    /** @param CompiledRestRoute $route */
     private function restCallback(array $route): \Closure
     {
         return function (mixed $request = null) use ($route): mixed {
             $service = $this->controllers->get($route['service']);
 
+            if (!is_object($service)) {
+                throw new \RuntimeException(sprintf('REST route "%s" controller service is not an object.', $route['name']));
+            }
+
             return $this->invokeController($service, $route['method'], $request, $this->restRequestParameters($request));
         };
     }
 
-    /** @param array<string, mixed> $route */
+    /** @param CompiledRestRoute $route */
     private function restPermissionCallback(array $route): callable
     {
         return function (mixed $request = null) use ($route): mixed {
-            $permissionCallback = $route['rest']['permission_callback'] ?? null;
+            $permissionCallback = $route['rest']['permission_callback'];
 
             if ($permissionCallback === null) {
-                if (($route['rest']['public'] ?? false) === true) {
+                if ($route['rest']['public']) {
                     return true;
                 }
 
@@ -177,7 +233,7 @@ final class RouteLoader
             if (is_string($permissionCallback)) {
                 $service = $this->controllers->get($route['service']);
 
-                if (method_exists($service, $permissionCallback)) {
+                if (is_object($service) && method_exists($service, $permissionCallback)) {
                     return $this->invokeController(
                         $service,
                         $permissionCallback,
@@ -235,12 +291,15 @@ final class RouteLoader
             return $attributes[$parameter->getName()];
         }
 
-        if (is_object($request) && method_exists($request, 'has_param') && $request->has_param($parameter->getName())) {
-            return $request->get_param($parameter->getName());
+        if (
+            is_object($request)
+            && $this->callObjectMethod($request, 'has_param', $parameter->getName()) === true
+        ) {
+            return $this->callObjectMethod($request, 'get_param', $parameter->getName());
         }
 
-        if (is_object($request) && method_exists($request, 'get_param')) {
-            $value = $request->get_param($parameter->getName());
+        if (is_object($request)) {
+            $value = $this->callObjectMethod($request, 'get_param', $parameter->getName());
 
             if ($value !== null) {
                 return $value;
@@ -285,6 +344,17 @@ final class RouteLoader
         return false;
     }
 
+    private function callObjectMethod(object $object, string $method, mixed ...$arguments): mixed
+    {
+        $callback = [$object, $method];
+
+        if (!is_callable($callback)) {
+            return null;
+        }
+
+        return $callback(...$arguments);
+    }
+
     private function normalizeResponse(mixed $value): Response
     {
         if ($value instanceof Response) {
@@ -302,25 +372,25 @@ final class RouteLoader
         return new JsonResponse($value);
     }
 
-    /** @param array<string, mixed> $definition */
+    /** @param CompiledRoute|CompiledRestRoute $definition */
     private function symfonyRoute(array $definition): Route
     {
         return new Route(
             $definition['path'],
-            $definition['defaults'] ?? [],
-            $definition['requirements'] ?? [],
-            $definition['options'] ?? [],
-            $definition['host'] ?? '',
-            $definition['schemes'] ?? [],
-            $definition['methods'] ?? [],
-            $definition['condition'] ?? '',
+            $definition['defaults'],
+            $definition['requirements'],
+            $definition['options'],
+            $definition['host'],
+            $definition['schemes'],
+            $definition['methods'],
+            $definition['condition'],
         );
     }
 
-    /** @param array<string, mixed> $route */
+    /** @param CompiledRestRoute $route */
     private function restPath(array $route): string
     {
-        $explicitPath = $route['rest']['path'] ?? null;
+        $explicitPath = $route['rest']['path'];
 
         if (is_string($explicitPath) && $explicitPath !== '') {
             return str_starts_with($explicitPath, '/') ? $explicitPath : '/' . $explicitPath;
@@ -360,10 +430,41 @@ final class RouteLoader
             $parameters = $request->get_url_params();
 
             if (is_array($parameters)) {
-                return $parameters;
+                return $this->stringKeyMap($parameters);
             }
         }
 
         return [];
+    }
+
+    /**
+     * @param array<mixed, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function stringKeyMap(array $values): array
+    {
+        $map = [];
+
+        foreach ($values as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            $map[$key] = $value;
+        }
+
+        return $map;
+    }
+
+    /** @return non-falsy-string */
+    private function nonFalsyString(string $value, string $routeName, string $field): string
+    {
+        if ($value === '' || $value === '0') {
+            throw new \RuntimeException(
+                sprintf('REST route "%s" must define a non-falsy %s.', $routeName, $field),
+            );
+        }
+
+        return $value;
     }
 }

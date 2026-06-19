@@ -237,8 +237,9 @@ final class WpContext implements \JsonSerializable
         }
 
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+        $scriptName = is_scalar($scriptName) || $scriptName instanceof \Stringable ? (string) $scriptName : '';
 
-        return stripos(wp_login_url(), (string) $scriptName) !== false;
+        return $scriptName !== '' && stripos(wp_login_url(), $scriptName) !== false;
     }
 
     private static function isWpActivateRequest(): bool
@@ -252,7 +253,8 @@ final class WpContext implements \JsonSerializable
 
     private static function isPageNow(string $page, string $url): bool
     {
-        $pageNow = (string) ($GLOBALS['pagenow'] ?? '');
+        $pageNow = $GLOBALS['pagenow'] ?? '';
+        $pageNow = is_scalar($pageNow) || $pageNow instanceof \Stringable ? (string) $pageNow : '';
 
         if ($pageNow !== '' && basename($pageNow) === $page) {
             return true;

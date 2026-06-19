@@ -191,7 +191,6 @@ abstract class AbstractBundle implements BundleInterface, ConfigurableExtensionI
             );
         }
 
-        // @phpstan-ignore new.internalClass, method.internalClass
         $this->extension = new BundleExtension($this, $this->extensionAlias);
 
         return $this->extension;

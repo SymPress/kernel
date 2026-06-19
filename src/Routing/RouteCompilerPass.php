@@ -21,8 +21,11 @@ final class RouteCompilerPass implements CompilerPassInterface
             return;
         }
 
-        $environment = $container->hasParameter('kernel.environment')
-            ? (string) $container->getParameter('kernel.environment')
+        $environmentParameter = $container->hasParameter('kernel.environment')
+            ? $container->getParameter('kernel.environment')
+            : null;
+        $environment = is_scalar($environmentParameter) || $environmentParameter instanceof \Stringable
+            ? (string) $environmentParameter
             : null;
         $frontendRoutes = [];
         $restRoutes = [];
@@ -60,7 +63,49 @@ final class RouteCompilerPass implements CompilerPassInterface
         $definition->setArgument(2, $restRoutes);
     }
 
-    /** @return array{list<array<string, mixed>>, list<array<string, mixed>>} */
+    /**
+     * @return array{
+     *     list<array{
+     *         name: string,
+     *         path: string,
+     *         methods: list<string>,
+     *         schemes: list<string>,
+     *         host: string,
+     *         defaults: array<string, mixed>,
+     *         requirements: array<string, string>,
+     *         options: array<string, mixed>,
+     *         condition: string,
+     *         priority: int,
+     *         service: string,
+     *         class: string,
+     *         method: string
+     *     }>,
+     *     list<array{
+     *         name: string,
+     *         path: string,
+     *         methods: list<string>,
+     *         schemes: list<string>,
+     *         host: string,
+     *         defaults: array<string, mixed>,
+     *         requirements: array<string, string>,
+     *         options: array<string, mixed>,
+     *         condition: string,
+     *         priority: int,
+     *         service: string,
+     *         class: string,
+     *         method: string,
+     *         rest: array{
+     *             namespace: string,
+     *             path: ?string,
+     *             args: array<string, array<string, mixed>>,
+     *             permission_callback: mixed,
+     *             public: bool,
+     *             show_in_index: ?bool,
+     *             override: bool
+     *         }
+     *     }>
+     * }
+     */
     private function compiledRoutesForController(string $class, string $serviceId, ?string $environment): array
     {
         $frontendRoutes = [];
@@ -153,12 +198,12 @@ final class RouteCompilerPass implements CompilerPassInterface
         return [
             'name'         => $name,
             'path'         => $route->getPath(),
-            'methods'      => array_values($route->getMethods()),
-            'schemes'      => array_values($route->getSchemes()),
+            'methods'      => $this->stringList($route->getMethods()),
+            'schemes'      => $this->stringList($route->getSchemes()),
             'host'         => $route->getHost(),
-            'defaults'     => $route->getDefaults(),
-            'requirements' => $route->getRequirements(),
-            'options'      => $route->getOptions(),
+            'defaults'     => $this->stringKeyMap($route->getDefaults()),
+            'requirements' => $this->stringMap($route->getRequirements()),
+            'options'      => $this->stringKeyMap($route->getOptions()),
             'condition'    => $route->getCondition(),
             'priority'     => $collection->getPriority($name) ?? 0,
             'service'      => $service,
@@ -196,11 +241,7 @@ final class RouteCompilerPass implements CompilerPassInterface
             );
         }
 
-        $args = $options['args'] ?? [];
-
-        if (!is_array($args)) {
-            $args = [];
-        }
+        $args = $this->restArgs($options['args'] ?? []);
 
         $permissionCallback = $options['permission_callback'] ?? null;
         $public = ($options['public'] ?? false) === true;
@@ -223,5 +264,82 @@ final class RouteCompilerPass implements CompilerPassInterface
             'show_in_index'       => is_bool($options['show_in_index'] ?? null) ? $options['show_in_index'] : null,
             'override'            => (bool) ($options['override'] ?? false),
         ];
+    }
+
+    /**
+     * @param array<mixed, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function stringKeyMap(array $values): array
+    {
+        $map = [];
+
+        foreach ($values as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            $map[$key] = $value;
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param array<mixed, mixed> $values
+     * @return array<string, string>
+     */
+    private function stringMap(array $values): array
+    {
+        $map = [];
+
+        foreach ($values as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            if (!is_scalar($value) && !$value instanceof \Stringable) {
+                continue;
+            }
+
+            $map[$key] = (string) $value;
+        }
+
+        return $map;
+    }
+
+    /** @return list<string> */
+    private function stringList(mixed $values): array
+    {
+        if (!is_array($values)) {
+            return [];
+        }
+
+        return array_values(
+            array_filter(
+                $values,
+                static fn (mixed $value): bool => is_string($value),
+            ),
+        );
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function restArgs(mixed $args): array
+    {
+        if (!is_array($args)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($args as $name => $definition) {
+            if (!is_string($name) || !is_array($definition)) {
+                continue;
+            }
+
+            $normalized[$name] = $this->stringKeyMap($definition);
+        }
+
+        return $normalized;
     }
 }

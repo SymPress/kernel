@@ -40,7 +40,8 @@ final class DebugContainerCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $search = strtolower((string) $input->getArgument('search'));
+        $searchArgument = $input->getArgument('search');
+        $search = is_string($searchArgument) ? strtolower($searchArgument) : '';
         $items = $this->items($input);
 
         foreach ($items as $item) {
@@ -91,7 +92,7 @@ final class DebugContainerCommand extends Command
             $runtimeContainer instanceof SymfonyContainerInterface
             && method_exists($runtimeContainer, 'getServiceIds')
         ) {
-            $ids = $runtimeContainer->getServiceIds();
+            $ids = $this->stringList($runtimeContainer->getServiceIds());
             sort($ids);
 
             return $ids;
@@ -117,6 +118,21 @@ final class DebugContainerCommand extends Command
         return array_map(
             fn (string $id): string => $this->describeService($id, $showArguments),
             $ids,
+        );
+    }
+
+    /** @return list<string> */
+    private function stringList(mixed $values): array
+    {
+        if (!is_array($values)) {
+            return [];
+        }
+
+        return array_values(
+            array_filter(
+                $values,
+                static fn (mixed $value): bool => is_string($value),
+            ),
         );
     }
 

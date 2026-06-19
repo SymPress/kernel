@@ -33,7 +33,8 @@ final class ContainerDumpCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $format = strtolower((string) $input->getOption('format'));
+        $format = $input->getOption('format');
+        $format = is_string($format) ? strtolower($format) : 'yaml';
         $builder = $this->container->builder();
 
         if ($format === 'yaml') {

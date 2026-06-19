@@ -127,10 +127,10 @@ final class BundleDiscovery
         }
 
         $metadata = $this->composerMetadata($composerFile);
-        $kernel = $metadata['extra']['kernel'] ?? null;
-        $bundleClass = is_array($kernel) ? (string) ($kernel['bundle'] ?? '') : '';
-        $entry = is_array($kernel) ? (string) ($kernel['entry'] ?? '') : '';
-        $type = (string) ($metadata['type'] ?? '');
+        $kernel = $this->kernelMetadata($metadata);
+        $bundleClass = $this->stringValue($kernel['bundle'] ?? null);
+        $entry = $this->stringValue($kernel['entry'] ?? null);
+        $type = $this->stringValue($metadata['type'] ?? null);
 
         if ($bundleClass === '' || $entry === '' || $type === '') {
             return null;
@@ -211,7 +211,7 @@ final class BundleDiscovery
         }
 
         $bundleClass = is_string($value) ? $value : (is_string($key) ? $key : '');
-        $environments = is_array($value) ? $value : ['all' => true];
+        $environments = is_array($value) ? $this->stringKeyMap($value) : ['all' => true];
 
         if ($bundleClass === '' || !$this->shouldLoadConfiguredBundle($environments)) {
             return null;
@@ -458,9 +458,9 @@ final class BundleDiscovery
             }
 
             $metadata = $this->composerMetadata($composerFile);
-            $kernel = $metadata['extra']['kernel'] ?? null;
-            $entry = is_array($kernel) ? (string) ($kernel['entry'] ?? '') : '';
-            $type = (string) ($metadata['type'] ?? '');
+            $kernel = $this->kernelMetadata($metadata);
+            $entry = $this->stringValue($kernel['entry'] ?? null);
+            $type = $this->stringValue($metadata['type'] ?? null);
 
             if ($entry === '' || $type === '') {
                 return false;
@@ -516,7 +516,7 @@ final class BundleDiscovery
 
         $decoded = json_decode($contents, true);
 
-        $this->metadata[$composerFile] = is_array($decoded) ? $decoded : [];
+        $this->metadata[$composerFile] = is_array($decoded) ? $this->stringKeyMap($decoded) : [];
 
         return $this->metadata[$composerFile];
     }
@@ -576,7 +576,7 @@ final class BundleDiscovery
 
         $metadata = $this->composerMetadata($composerFile);
 
-        return is_array($metadata['extra']['kernel'] ?? null);
+        return $this->kernelMetadata($metadata) !== [];
     }
 
     private function isKernelPackage(string $package): bool
@@ -613,5 +613,50 @@ final class BundleDiscovery
         }
 
         return array_values(array_unique($normalized));
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     * @return array<string, mixed>
+     */
+    private function kernelMetadata(array $metadata): array
+    {
+        $extra = $metadata['extra'] ?? null;
+
+        if (!is_array($extra)) {
+            return [];
+        }
+
+        $kernel = $extra['kernel'] ?? null;
+
+        return is_array($kernel) ? $this->stringKeyMap($kernel) : [];
+    }
+
+    private function stringValue(mixed $value): string
+    {
+        if (is_scalar($value) || $value instanceof \Stringable) {
+            return (string) $value;
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<mixed, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function stringKeyMap(array $values): array
+    {
+        $map = [];
+
+        foreach ($values as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            $map[$key] = $value;
+        }
+
+        return $map;
     }
 }
