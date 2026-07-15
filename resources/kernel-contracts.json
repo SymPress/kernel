@@ -1,0 +1,37 @@
+{
+    "version": 1,
+    "composerExtraSchema": "schema/kernel-extra.schema.json",
+    "composerExtraKeys": [
+        "bundle",
+        "entry",
+        "packagePrefixes",
+        "package_prefixes",
+        "requires"
+    ],
+    "publicEntryPoints": [
+        "SymPress\\Kernel\\App",
+        "SymPress\\Kernel\\Container",
+        "SymPress\\Kernel\\Kernel\\KernelInterface",
+        "SymPress\\Kernel\\Kernel\\SiteKernel",
+        "SymPress\\Kernel\\Bundle\\AbstractBundle",
+        "SymPress\\Kernel\\Bundle\\BundleInterface",
+        "SymPress\\Kernel\\Attribute\\AsHook",
+        "SymPress\\Kernel\\Attribute\\Route"
+    ],
+    "lifecycleActions": {
+        "ACTION_BEFORE_CONTAINER_BUILD": "kernel.before_container_build",
+        "ACTION_BOOTED": "kernel.booted",
+        "ACTION_BOOTING": "kernel.booting",
+        "ACTION_CONTAINER_CONFIGURED": "kernel.container_configured",
+        "ACTION_CONTAINER_READY": "kernel.container_ready",
+        "ACTION_ERROR": "kernel.error",
+        "LEGACY_ACTION_BEFORE_CONTAINER_BUILD": "symfony_before_container_build",
+        "LEGACY_ACTION_CONTAINER_LOADED": "symfony_container_loaded",
+        "LEGACY_ACTION_CONTAINER_READY": "symfony_container_ready"
+    },
+    "consoleCommands": {
+        "container:dump": "SymPress\\Kernel\\Console\\ContainerDumpCommand",
+        "debug:container": "SymPress\\Kernel\\Console\\DebugContainerCommand",
+        "lint:container": "SymPress\\Kernel\\Console\\LintContainerCommand"
+    }
+}

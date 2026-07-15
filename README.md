@@ -77,6 +77,12 @@ SymPress discovers installed Composer packages that expose `extra.kernel`
 metadata. Projects that want to narrow discovery can set
 `extra.kernel.package_prefixes` in the root `composer.json`.
 
+The machine-readable metadata contract is
+[`schema/kernel-extra.schema.json`](schema/kernel-extra.schema.json). Public
+entry points, lifecycle actions and container inspection commands are listed in
+[`resources/kernel-contracts.json`](resources/kernel-contracts.json) and
+verified by the test suite.
+
 ```json
 {
     "name": "sympress/project-plugin",

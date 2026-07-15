@@ -99,6 +99,9 @@ Legacy compatibility actions are still emitted:
 
 A bundle is described in `composer.json > extra.kernel`:
 
+The accepted keys and required bundle/root shapes are defined by the
+[`extra.kernel` JSON Schema](../schema/kernel-extra.schema.json).
+
 ```json
 {
   "type": "wordpress-plugin",

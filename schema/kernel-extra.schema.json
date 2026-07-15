@@ -1,0 +1,71 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/sympress/kernel/main/schema/kernel-extra.schema.json",
+    "title": "SymPress Composer extra.kernel metadata",
+    "type": "object",
+    "properties": {
+        "bundle": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Autoloadable BundleInterface implementation."
+        },
+        "entry": {
+            "type": "string",
+            "minLength": 1,
+            "description": "WordPress package entry path or stable library identifier."
+        },
+        "requires": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "minLength": 1
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "uniqueItems": true
+                }
+            ]
+        },
+        "package_prefixes": {
+            "$ref": "#/$defs/packagePrefixes"
+        },
+        "packagePrefixes": {
+            "$ref": "#/$defs/packagePrefixes",
+            "description": "Legacy camelCase alias for package_prefixes."
+        }
+    },
+    "$defs": {
+        "packagePrefixes": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "minLength": 1
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "uniqueItems": true
+                }
+            ]
+        }
+    },
+    "additionalProperties": false,
+    "anyOf": [
+        {
+            "required": ["bundle", "entry"]
+        },
+        {
+            "required": ["package_prefixes"]
+        },
+        {
+            "required": ["packagePrefixes"]
+        }
+    ]
+}
