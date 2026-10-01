@@ -334,6 +334,39 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         self::assertFalse($kernel->tryUseRuntimeContainer($kernel->createContainer(), new BundleRegistry()));
     }
 
+    public function testMalformedRememberedResourceMapsRebuildValidConfiguration(): void
+    {
+        $project = $this->tmpPath('malformed-resources');
+        mkdir($project . '/config', 0700, true);
+        $this->writeImportedConfig($project . '/config/services.php', 'valid');
+        $kernel = $this->kernel($project);
+        $registry = new BundleRegistry();
+        $container = $kernel->createContainer();
+        $files = $kernel->configureContainer($container->builder(), $container, $registry);
+        $kernel->createRuntimeContainer($container, $registry, $files);
+        $path = $project . '/var/cache/test/kernel/meta.php';
+        foreach ([[0 => 'malformed'], ['invalid' => ['nested']]] as $resources) {
+            $metadata = require $path;
+            $metadata['config_resources'] = $resources;
+            file_put_contents($path, '<?php return ' . var_export($metadata, true) . ';');
+            $rebuilt = $kernel->createContainer();
+            self::assertFalse($kernel->tryUseRuntimeContainer($rebuilt, $registry));
+            $files = $kernel->configureContainer($rebuilt->builder(), $rebuilt, $registry);
+            $kernel->createRuntimeContainer($rebuilt, $registry, $files);
+            self::assertSame('valid', $rebuilt->getParameter('imported.value'));
+            self::assertTrue($kernel->tryUseRuntimeContainer($kernel->createContainer(), $registry));
+        }
+        $_SERVER['SYMPRESS_KERNEL_IMMUTABLE_CACHE'] = '1';
+        $_SERVER['SYMPRESS_KERNEL_BUILD_ID'] = 'immutable-review';
+        try {
+            $fingerprinter = new ContainerResourceFingerprinter($project, 'test', false);
+            self::assertFalse($fingerprinter->configResourcesAreFresh([0 => 'malformed']));
+            self::assertSame([], $fingerprinter->refreshConfigResources([0 => 'malformed']));
+        } finally {
+            unset($_SERVER['SYMPRESS_KERNEL_IMMUTABLE_CACHE'], $_SERVER['SYMPRESS_KERNEL_BUILD_ID']);
+        }
+    }
+
     public function testImmutablePolicyRequiresAndInvalidatesWithBuildIdentity(): void
     {
         $project = $this->tmpPath('immutable-cache');
