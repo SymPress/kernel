@@ -185,13 +185,16 @@ final class ContainerResourceFingerprinter
         return $resources;
     }
 
-    /** @param array<string, string> $resources
+    /** @param array<array-key, mixed> $resources
      * @return array<string, string>
      */
     public function refreshConfigResources(array $resources): array
     {
         $fresh = [];
         foreach ($resources as $key => $unused) {
+            if (!is_string($key) || !is_string($unused)) {
+                continue;
+            }
             $fresh[$key] = $this->configResourceValue($key);
         }
         ksort($fresh);
@@ -203,15 +206,16 @@ final class ContainerResourceFingerprinter
         if (!is_array($resources)) {
             return false;
         }
+        foreach ($resources as $path => $expected) {
+            if (!is_string($path) || !is_string($expected)) {
+                return false;
+            }
+        }
         if ($this->immutable()) {
             return true;
         }
 
         foreach ($resources as $path => $expected) {
-            if (!is_string($path) || !is_string($expected)) {
-                return false;
-            }
-
             if ($this->configResourceValue($path) !== $expected) {
                 return false;
             }
