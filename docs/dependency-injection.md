@@ -1187,3 +1187,14 @@ Useful debug points:
 - [Non Shared Services](https://symfony.com/doc/current/service_container/shared.html)
 - [Synthetic Services](https://symfony.com/doc/current/service_container/synthetic_services.html)
 - [Service Tags](https://symfony.com/doc/current/service_container/tags.html)
+
+
+Compiler-provided `DirectoryResource` inputs (for example external ORM entity
+paths) participate in mutable freshness checks and generated class identity.
+Recursive PHP resources hash contents, additions and removals in stable order;
+child symlink files/directories are not followed outside the configured root.
+A cold build may compile twice when compiler-added resources change its initial
+identity. The second builder is fresh, uses the final `kernel.container_class`,
+and must observe the same resource set before publication. Warm loads do not
+compile again. Explicit immutable deployment mode skips these checks under its
+required build-ID contract.

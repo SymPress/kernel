@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SymPress\Kernel\Kernel;
 
 use SymPress\Kernel\Bundle\BundleRegistry;
+use Symfony\Component\Config\Resource\DirectoryResource;
 use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\Config\Resource\FileResource;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -159,6 +160,11 @@ final class ContainerResourceFingerprinter
         }
 
         foreach ($builder->getResources() as $resource) {
+            if ($resource instanceof DirectoryResource) {
+                $key = 'directory:' . base64_encode(json_encode([$resource->getResource(), $resource->getPattern()], JSON_THROW_ON_ERROR));
+                $resources[$key] = $this->configResourceValue($key);
+                continue;
+            }
             if ($resource instanceof FileResource) {
                 $file = $resource->getResource();
                 $resources[$file] = $this->fileFingerprint($file);
@@ -179,6 +185,19 @@ final class ContainerResourceFingerprinter
         return $resources;
     }
 
+    /** @param array<string, string> $resources
+     * @return array<string, string>
+     */
+    public function refreshConfigResources(array $resources): array
+    {
+        $fresh = [];
+        foreach ($resources as $key => $unused) {
+            $fresh[$key] = $this->configResourceValue($key);
+        }
+        ksort($fresh);
+        return $fresh;
+    }
+
     public function configResourcesAreFresh(mixed $resources): bool
     {
         if (!is_array($resources)) {
@@ -193,17 +212,7 @@ final class ContainerResourceFingerprinter
                 return false;
             }
 
-            if (str_starts_with($path, 'exists:')) {
-                $actual = file_exists(substr($path, 7)) ? 'exists:1' : 'exists:0';
-
-                if ($actual !== $expected) {
-                    return false;
-                }
-
-                continue;
-            }
-
-            if ($this->fileFingerprint($path) !== $expected) {
+            if ($this->configResourceValue($path) !== $expected) {
                 return false;
             }
         }
@@ -289,6 +298,43 @@ final class ContainerResourceFingerprinter
         $value = (string) $value;
 
         return filter_var($value, \FILTER_VALIDATE_BOOL, \FILTER_NULL_ON_FAILURE) ?? ($value !== '');
+    }
+
+    private function configResourceValue(string $key): string
+    {
+        if (str_starts_with($key, 'exists:')) {
+            return file_exists(substr($key, 7)) ? 'exists:1' : 'exists:0';
+        }
+        if (!str_starts_with($key, 'directory:')) {
+            return $this->fileFingerprint($key);
+        }
+        $decoded = base64_decode(substr($key, 10), true);
+        $descriptor = is_string($decoded) ? json_decode($decoded, true) : null;
+        if (
+            !is_array($descriptor) || count($descriptor) !== 2 || !is_string($descriptor[0] ?? null)
+            || (!is_string($descriptor[1] ?? null) && ($descriptor[1] ?? null) !== null)
+        ) {
+            return 'invalid-directory';
+        }
+        $root = $descriptor[0];
+        $pattern = is_string($descriptor[1] ?? null) ? $descriptor[1] : null;
+        if (!is_dir($root) || is_link($root)) {
+            return 'missing-directory';
+        }
+        $files = [];
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || $file->isLink() || !$file->isFile()) {
+                continue;
+            }
+            if ($pattern !== null && preg_match($pattern, $file->getFilename()) !== 1) {
+                continue;
+            }
+            $path = $file->getPathname();
+            $files[$path] = $this->fileFingerprint($path);
+        }
+        ksort($files);
+        return hash('sha256', json_encode($files, JSON_THROW_ON_ERROR));
     }
 
     private function fileFingerprint(string $file): string
