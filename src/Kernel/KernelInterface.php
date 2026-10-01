@@ -9,10 +9,9 @@ use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Container;
 use Symfony\Component\Config\Loader\LoaderInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\Kernel\KernelInterface as SymfonyKernelInterface;
-use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\HttpKernel\KernelInterface as SymfonyKernelInterface;
 
-interface KernelInterface extends HttpKernelInterface, SymfonyKernelInterface
+interface KernelInterface extends SymfonyKernelInterface
 {
     public function getProjectDir(): string;
 

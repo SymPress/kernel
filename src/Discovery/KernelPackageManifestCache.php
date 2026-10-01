@@ -5,9 +5,20 @@ declare(strict_types=1);
 namespace SymPress\Kernel\Discovery;
 
 use Composer\InstalledVersions;
+use SymPress\Kernel\Kernel\CachePath;
+use SymPress\Kernel\Kernel\ContainerResourceFingerprinter;
 
 final class KernelPackageManifestCache
 {
+    /** @var array<string, array<string, mixed>> */
+    private array $metadata = [];
+
+    /** @return array<string, array<string, mixed>> */
+    public function metadata(): array
+    {
+        return $this->metadata;
+    }
+
     /**
      * @param list<string> $packagePrefixes
      */
@@ -27,10 +38,45 @@ final class KernelPackageManifestCache
             return null;
         }
 
-        $metadata = require $file;
+        if (is_link($file) || is_link(dirname($file)) || (fileperms(dirname($file)) & 0022) !== 0) {
+            return null;
+        }
+        try {
+            if (function_exists('opcache_invalidate')) {
+                opcache_invalidate($file, true);
+            }
+            $metadata = require $file;
+        } catch (\ParseError) {
+            return null;
+        }
 
         if (!is_array($metadata) || ($metadata['fingerprint'] ?? null) !== $this->fingerprint()) {
             return null;
+        }
+
+        $inputs = $metadata['inputs'] ?? null;
+        $descriptors = $metadata['metadata'] ?? null;
+        if (!is_array($inputs) || !is_array($descriptors)) {
+            return null;
+        }
+        foreach ($inputs as $path => $expected) {
+            if (!is_string($path) || (!$this->immutable() && $this->fileFingerprint($path) !== $expected)) {
+                return null;
+            }
+        }
+        foreach ($descriptors as $path => $descriptor) {
+            if (!is_string($path) || !is_array($descriptor)) {
+                return null;
+            }
+            $projected = [];
+            foreach ($descriptor as $key => $value) {
+                if (!is_string($key)) {
+                    continue;
+                }
+
+                $projected[$key] = $value;
+            }
+            $this->metadata[$path] = $projected;
         }
 
         $packages = $metadata['packages'] ?? null;
@@ -51,8 +97,12 @@ final class KernelPackageManifestCache
         return $packages;
     }
 
-    /** @param list<string> $packages */
-    public function write(array $packages): void
+    /**
+     * @param list<string> $packages
+     * @param array<string, array<string, mixed>> $metadata
+     * @param array<string, string> $inputs
+     */
+    public function write(array $packages, array $metadata = [], array $inputs = []): void
     {
         $file = $this->cacheFile();
 
@@ -62,7 +112,9 @@ final class KernelPackageManifestCache
 
         $directory = dirname($file);
 
-        if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
+        try {
+            CachePath::ensureDirectory($directory);
+        } catch (\RuntimeException) {
             return;
         }
 
@@ -73,17 +125,29 @@ final class KernelPackageManifestCache
                 [
                     'fingerprint' => $this->fingerprint(),
                     'packages'    => array_values(array_unique($packages)),
+                    'metadata' => $metadata,
+                    'inputs' => $inputs,
                 ],
                 true,
             ),
         );
         $temporaryFile = sprintf('%s.%s.tmp', $file, bin2hex(random_bytes(6)));
 
-        if (file_put_contents($temporaryFile, $payload, LOCK_EX) === false) {
-            return;
+        $previousMask = umask(0077);
+        try {
+            if (file_put_contents($temporaryFile, $payload, LOCK_EX) === false) {
+                return;
+            }
+            chmod($temporaryFile, 0600);
+            if (@rename($temporaryFile, $file) && function_exists('opcache_invalidate')) {
+                opcache_invalidate($file, true);
+            }
+        } finally {
+            umask($previousMask);
+            if (is_file($temporaryFile)) {
+                unlink($temporaryFile);
+            }
         }
-
-        @rename($temporaryFile, $file);
     }
 
     private function cacheFile(): ?string
@@ -98,11 +162,8 @@ final class KernelPackageManifestCache
             $environment = 'production';
         }
 
-        return sprintf(
-            '%s/var/cache/%s/kernel/discovery-packages.php',
-            rtrim($this->projectDir, '/'),
-            $environment,
-        );
+        $configured = $_SERVER['APP_CACHE_DIR'] ?? $_ENV['APP_CACHE_DIR'] ?? getenv('APP_CACHE_DIR');
+        return CachePath::resolve($this->projectDir, $environment, is_string($configured) && $configured !== '' ? $configured : null) . '/discovery-packages.php';
     }
 
     private function fingerprint(): string
@@ -115,12 +176,23 @@ final class KernelPackageManifestCache
                     (string) $this->projectDir,
                     (string) $this->environment,
                     implode(',', $this->packagePrefixes),
-                    $this->fileFingerprint($this->rootComposerFile()),
-                    $this->fileFingerprint($this->rootComposerLockFile()),
-                    $this->fileFingerprint($this->installedPackagesFile()),
+                    $this->immutable() ? 'immutable' : $this->fileFingerprint($this->rootComposerFile()),
+                    $this->immutable() ? $this->buildIdentity() : $this->fileFingerprint($this->rootComposerLockFile()),
+                    $this->immutable() ? 'immutable' : $this->fileFingerprint($this->installedPackagesFile()),
                 ],
             ),
         );
+    }
+
+    private function buildIdentity(): string
+    {
+        $value = defined('SYMPRESS_KERNEL_BUILD_ID') ? constant('SYMPRESS_KERNEL_BUILD_ID') : ($_SERVER['SYMPRESS_KERNEL_BUILD_ID'] ?? $_ENV['SYMPRESS_KERNEL_BUILD_ID'] ?? getenv('SYMPRESS_KERNEL_BUILD_ID'));
+        return is_string($value) ? $value : '';
+    }
+
+    private function immutable(): bool
+    {
+        return (new ContainerResourceFingerprinter((string) $this->projectDir, (string) $this->environment, false))->immutable();
     }
 
     private function rootComposerFile(): string
@@ -151,6 +223,7 @@ final class KernelPackageManifestCache
             return 'missing';
         }
 
-        return sprintf('%s:%s', (string) filemtime($file), (string) filesize($file));
+        clearstatcache(true, $file);
+        return hash_file('sha256', $file) ?: 'unreadable';
     }
 }

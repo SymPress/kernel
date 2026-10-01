@@ -8,11 +8,8 @@ use Psr\Container\ContainerInterface as PsrContainerInterface;
 use SymPress\Kernel\App;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Container;
-use SymPress\Kernel\Hook\HookCompilerPass;
-use SymPress\Kernel\Routing\RouteCompilerPass;
 use SymPress\Kernel\SiteConfig;
 use SymPress\Kernel\WpContext;
-use Symfony\Component\Console\DependencyInjection\AddConsoleCommandPass;
 use Symfony\Component\DependencyInjection\Compiler\MergeExtensionConfigurationPass;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
@@ -35,42 +32,64 @@ final readonly class ContainerCacheManager
         array $runtimeConfigFiles,
     ): bool {
 
-        if ($this->fingerprints->tracksSourceChanges()) {
-            return false;
-        }
-
         $metaFile = sprintf('%s/meta.php', $this->cacheDir);
-
-        if (!is_file($metaFile)) {
+        $lockFile = sprintf('%s/container.lock', $this->cacheDir);
+        if (
+            !is_file($metaFile) || !is_file($lockFile) || is_link($metaFile) || is_link($lockFile)
+            || is_link($this->cacheDir) || (fileperms($this->cacheDir) & 0022) !== 0
+        ) {
             return false;
         }
-
-        $metadata = require $metaFile;
-
-        if (!is_array($metadata)) {
+        $lock = fopen($lockFile, 'r');
+        if (!is_resource($lock)) {
             return false;
         }
-
-        return $this->useCachedRuntimeContainer(
-            $container,
-            $this->fingerprints->stringKeyMap($metadata),
-            $this->fingerprints->fingerprint($bundles, $runtimeConfigFiles),
-        );
+        try {
+            if (!flock($lock, LOCK_SH)) {
+                return false;
+            }
+            $metadata = $this->readMetadata($metaFile);
+            if (!is_array($metadata) || !$this->fingerprints->discoveryResourcesAreFresh($metadata['config_discovery'] ?? null)) {
+                return false;
+            }
+            $stored = $metadata['runtime_config_files'] ?? null;
+            if ($runtimeConfigFiles === [] && is_array($stored)) {
+                $runtimeConfigFiles = array_values(array_filter($stored, is_string(...)));
+            }
+            return $this->useCachedRuntimeContainer(
+                $container,
+                $this->fingerprints->stringKeyMap($metadata),
+                $this->fingerprints->fingerprint($bundles, $runtimeConfigFiles),
+            );
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
-    /** @param array<int, string> $configFiles */
+    /**
+     * @param array<int, string> $configFiles
+     * @param list<string> $configDirectories
+     */
     public function createRuntimeContainer(
         Container $container,
         BundleRegistry $bundles,
         array $configFiles,
+        array $configDirectories = [],
     ): void {
 
         $filesystem = new Filesystem();
-        $filesystem->mkdir($this->cacheDir);
+        CachePath::ensureDirectory($this->cacheDir);
         $metaFile = sprintf('%s/meta.php', $this->cacheDir);
         $lockFile = sprintf('%s/container.lock', $this->cacheDir);
         $fingerprint = $this->fingerprints->fingerprint($bundles, $configFiles);
+        if (is_link($lockFile)) {
+            throw new \RuntimeException('Refusing a symlinked kernel cache lock.');
+        }
+        $previousMask = umask(0077);
         $lock = fopen($lockFile, 'c+');
+        umask($previousMask);
+        chmod($lockFile, 0600);
 
         if (!is_resource($lock)) {
             throw new \RuntimeException(sprintf('Unable to create cache lock "%s".', $lockFile));
@@ -83,7 +102,7 @@ final readonly class ContainerCacheManager
 
             clearstatcache(true, $metaFile);
 
-            $metadata = is_file($metaFile) ? require $metaFile : null;
+            $metadata = $this->readMetadata($metaFile);
 
             if (
                 is_array($metadata)
@@ -98,7 +117,19 @@ final readonly class ContainerCacheManager
 
             $sourceResources = $this->fingerprints->sourceResourceManifest($bundles);
             $sourceFingerprint = $this->fingerprints->sourceResourceFingerprint($sourceResources);
-            $cacheKey = substr(hash('sha256', "{$fingerprint}|{$sourceFingerprint}"), 0, 16);
+            $inputResources = $this->fingerprints->configResourceManifest($container->builder(), $configFiles);
+            $knownResources = is_array($metadata) ? ($metadata['config_resources'] ?? []) : [];
+            if (is_array($knownResources)) {
+                foreach (array_keys($knownResources) as $path) {
+                    if (!is_string($path) || str_starts_with($path, 'exists:')) {
+                        continue;
+                    }
+
+                    $inputResources[$path] = is_file($path) ? (hash_file('sha256', $path) ?: 'unreadable') : 'missing';
+                }
+            }
+            ksort($inputResources);
+            $cacheKey = substr(hash('sha256', "{$fingerprint}|{$sourceFingerprint}|" . serialize($inputResources)), 0, 16);
             $containerFile = sprintf('%s/container_%s.php', $this->cacheDir, $cacheKey);
             clearstatcache(true, $containerFile);
 
@@ -120,24 +151,39 @@ final readonly class ContainerCacheManager
                 throw new \RuntimeException('The runtime container dumper did not return PHP code.');
             }
 
-            $filesystem->dumpFile($containerFile, $dump);
-            $filesystem->dumpFile(
-                $metaFile,
-                sprintf(
-                    "<?php\n\nreturn %s;\n",
-                    var_export(
-                        [
+            $previousMask = umask(0077);
+            try {
+                $filesystem->dumpFile($containerFile, $dump);
+                chmod($containerFile, 0600);
+                $filesystem->dumpFile(
+                    $metaFile,
+                    sprintf(
+                        "<?php\n\nreturn %s;\n",
+                        var_export(
+                            [
                             'fingerprint'        => $fingerprint,
+                            'runtime_config_files' => $configFiles,
+                            'config_discovery' => $this->fingerprints->discoveryResourceManifest($configDirectories),
                             'config_resources'   => $configResources,
                             'source_fingerprint' => $sourceFingerprint,
                             'source_resources'   => $sourceResources,
                             'class'              => $class,
                             'file'               => basename($containerFile),
-                        ],
-                        true,
+                            ],
+                            true,
+                        ),
                     ),
-                ),
-            );
+                );
+
+                chmod($metaFile, 0600);
+                if (function_exists('opcache_invalidate')) {
+                    opcache_invalidate($metaFile, true);
+                    opcache_invalidate($containerFile, true);
+                }
+            } finally {
+                umask($previousMask);
+            }
+            $this->cleanupContainers($containerFile);
 
             if (!class_exists($class, false)) {
                 require $containerFile;
@@ -150,19 +196,56 @@ final readonly class ContainerCacheManager
         }
     }
 
+    /** @return array<mixed, mixed>|null */
+    private function readMetadata(string $file): ?array
+    {
+        if (!is_file($file) || is_link($file)) {
+            return null;
+        }
+        try {
+            if (function_exists('opcache_invalidate')) {
+                opcache_invalidate($file, true);
+            }
+            $metadata = require $file;
+            return is_array($metadata) ? $metadata : null;
+        } catch (\ParseError) {
+            return null;
+        }
+    }
+
+    private function cleanupContainers(string $active): void
+    {
+        $files = array_values(array_filter(
+            glob($this->cacheDir . '/container_*.php') ?: [],
+            static fn (string $file): bool => !is_link($file) && preg_match('/^container_[a-f0-9]{16}\.php$/D', basename($file)) === 1,
+        ));
+        usort($files, static fn (string $left, string $right): int => (int) filemtime($right) <=> (int) filemtime($left));
+        foreach (array_slice($files, 3) as $file) {
+            if ($file === $active || is_link($file) || preg_match('/^container_[a-f0-9]{16}\.php$/D', basename($file)) !== 1 || filemtime($file) >= time() - 3600) {
+                continue;
+            }
+
+            unlink($file);
+        }
+    }
+
     private function createRuntimeBuilder(Container $container, string $class): ContainerBuilder
     {
         $runtime = new ContainerBuilder();
         $this->copyExtensions($container->builder(), $runtime);
         $runtime->merge($container->builder());
+        $cloner = new DefinitionCloner();
+        foreach ($runtime->getDefinitions() as $id => $definition) {
+            $runtime->setDefinition($id, $cloner->definition($definition));
+        }
+        foreach ($runtime->getAliases() as $id => $alias) {
+            $runtime->setAlias($id, clone $alias);
+        }
         $this->copyCompilerPasses($container->builder(), $runtime);
         $runtime->setParameter('kernel.container_class', $class);
         $runtime->getCompilerPassConfig()->setMergePass(
             new MergeExtensionConfigurationPass($this->registeredExtensionAliases($runtime)),
         );
-        $runtime->addCompilerPass(new HookCompilerPass());
-        $runtime->addCompilerPass(new RouteCompilerPass());
-        $runtime->addCompilerPass(new AddConsoleCommandPass());
         $this->ensureSynthetic($runtime, Container::CONTAINER_ID, Container::class);
         $this->ensureSynthetic($runtime, Container::CONFIG_ID, SiteConfig::class);
         $this->ensureSynthetic($runtime, Container::CONTEXT_ID, WpContext::class);
@@ -194,7 +277,7 @@ final readonly class ContainerCacheManager
     private function copyExtensions(ContainerBuilder $source, ContainerBuilder $target): void
     {
         foreach ($source->getExtensions() as $extension) {
-            $target->registerExtension($extension);
+            $target->registerExtension(clone $extension);
         }
     }
 
@@ -221,6 +304,8 @@ final readonly class ContainerCacheManager
             ($metadata['fingerprint'] ?? null) !== $fingerprint
             || !is_string($metadata['class'] ?? null)
             || !is_string($metadata['file'] ?? null)
+            || preg_match('/^KernelContainer_[a-f0-9]{16}$/D', $metadata['class']) !== 1
+            || $metadata['file'] !== 'container_' . substr($metadata['class'], strlen('KernelContainer_')) . '.php'
         ) {
             return false;
         }
@@ -238,7 +323,7 @@ final readonly class ContainerCacheManager
 
         $cachedContainerFile = sprintf('%s/%s', $this->cacheDir, basename($metadata['file']));
 
-        if (!is_file($cachedContainerFile)) {
+        if (!is_file($cachedContainerFile) || is_link($cachedContainerFile)) {
             return false;
         }
 

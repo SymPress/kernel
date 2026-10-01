@@ -21,6 +21,7 @@ final class App
     public const string LEGACY_ACTION_CONTAINER_READY = 'symfony_container_ready';
 
     private static ?self $app = null;
+    private static ?string $projectDirectory = null;
 
     private ?Container $container = null;
     private bool $booted = false;
@@ -79,9 +80,9 @@ final class App
         if (function_exists('error_log')) {
             error_log(
                 sprintf(
-                    '[sympress/kernel] %s: %s in %s:%d',
+                    '[sympress/kernel] %s; event=%s in %s:%d',
                     $throwable::class,
-                    $throwable->getMessage(),
+                    substr(hash('sha256', $throwable::class . ':' . $throwable->getFile() . ':' . $throwable->getLine()), 0, 16),
                     $throwable->getFile(),
                     $throwable->getLine(),
                 ),
@@ -249,12 +250,17 @@ final class App
 
     private static function defaultProjectDir(): string
     {
+        if (self::$projectDirectory !== null) {
+            return self::$projectDirectory;
+        }
         $directory = __DIR__;
 
         while (true) {
             $composerFile = sprintf('%s/composer.json', $directory);
 
             if (is_file($composerFile) && self::isProjectComposerFile($composerFile)) {
+                self::$projectDirectory = $directory;
+
                 return $directory;
             }
 
@@ -267,7 +273,9 @@ final class App
             $directory = $parent;
         }
 
-        return dirname(__DIR__, 3);
+        self::$projectDirectory = dirname(__DIR__, 3);
+
+        return self::$projectDirectory;
     }
 
     private static function isProjectComposerFile(string $composerFile): bool

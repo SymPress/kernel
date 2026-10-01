@@ -312,7 +312,7 @@ abstract class AbstractKernel implements KernelInterface
             $extension = $bundle->bundle()->getContainerExtension();
 
             if ($extension !== null && !$builder->hasExtension($extension->getAlias())) {
-                $builder->registerExtension($extension);
+                $builder->registerExtension(clone $extension);
             }
 
             if ($bundle->bundle() instanceof CompilerPassInterface) {
@@ -345,7 +345,7 @@ abstract class AbstractKernel implements KernelInterface
         return $this->containerCacheManager()->tryUseRuntimeContainer(
             $container,
             $bundles,
-            $this->configuration()->runtimeConfigFiles($bundles),
+            [],
         );
     }
 
@@ -354,7 +354,12 @@ abstract class AbstractKernel implements KernelInterface
         BundleRegistry $bundles,
         array $configFiles,
     ): void {
-        $this->containerCacheManager()->createRuntimeContainer($container, $bundles, $configFiles);
+        $directories = [...$this->configuration()->configDirectories($bundles), $this->projectDir . '/config'];
+        foreach ($bundles->all() as $bundle) {
+            $directories[] = $bundle->path() . '/Resources/config';
+            $directories[] = $bundle->path() . '/config';
+        }
+        $this->containerCacheManager()->createRuntimeContainer($container, $bundles, $configFiles, array_values(array_unique($directories)));
     }
 
     private function containerCacheManager(): ContainerCacheManager

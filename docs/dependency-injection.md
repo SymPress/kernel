@@ -146,7 +146,9 @@ Composer package discovery writes a small manifest cache below
 `var/cache/<environment>/kernel`. The manifest contains only packages that match
 the configured prefixes and declare `extra.kernel`, so runtime cache hits do not
 need to scan every installed Composer package. The manifest is invalidated when
-root Composer metadata or Composer's installed package metadata changes.
+root/installed Composer metadata or a consumed package composer.json changes.
+The manifest stores only bundle descriptors (name/type and extra.kernel), never
+entire Composer documents. Activation filters are reevaluated on each discovery.
 
 Manual bundles can also be registered:
 
@@ -987,47 +989,51 @@ wp console container:dump --format=yaml
 
 ## Runtime Cache
 
-The runtime container is written to `var/cache/<environment>/kernel`. The cache
-key is based on a fingerprint of:
+Both debug and production use compiled-container cache hits. A hit loads recorded
+config paths from `meta.php`, validates consumed input content, and takes a shared
+reader lock; it does not execute config loaders or rebuild discovery globs. Only
+misses take the exclusive writer lock and recheck after waiting. Writer metadata
+and container publication are atomic, private files use mode 0600, and newly
+created cache directories use 0700. Readers keep their lock until the referenced
+container is loaded. Under the writer lock, cleanup retains the newest three
+owned generations plus a one-hour grace period and never deletes unowned files.
 
-- project directory
-- environment
-- debug flag
-- deployment fingerprint
-- kernel package metadata
-- bundle metadata
-- loaded configuration files
+`APP_CACHE_DIR` is honored by both discovery and compilation. Server values take
+precedence over dotenv ENV values, then getenv. Relative values resolve under the
+project. The default is `var/cache/<environment>/kernel`; an unwritable cold
+project or a web-exposed default uses a private per-user/project temporary cache.
+An explicitly configured web-exposed cache is rejected. Existing read-only warm
+caches can still be read. Symlinked cache directories and writable-by-other-user
+cache directories are rejected. Keep configured cache parents trusted and outside
+DOCUMENT_ROOT/WP_CONTENT_DIR.
 
-The source files that can change compiled services are stored in the cache
-metadata as a manifest. Production cache hits use the deployment fingerprint as
-the normal invalidation boundary and do not stat every source file on every
-request. Enable `SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES=1` only for
-environments where source-level freshness checks are worth the request-time
-filesystem cost.
+Normal validation hashes root/package Composer metadata and config contents,
+including imported files, so equal size/timestamp edits invalidate correctly.
+Recorded config directory entries detect newly added/deleted config files. Debug
+also hashes source contents. Production source changes require a new
+`SYMPRESS_KERNEL_BUILD_ID`, a cache clear, or optional
+`SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES=1` (mtime/size source checks).
 
-Loaded configuration resources are tracked separately, including files imported
-from PHP/YAML config. Cache hits always validate those config resources so
-service wiring changes invalidate the runtime container.
+An explicit `SYMPRESS_KERNEL_IMMUTABLE_CACHE=1` policy skips per-request metadata,
+config, and discovery freshness scans and requires a nonempty
+`SYMPRESS_KERNEL_BUILD_ID`. It is safe only when the entire release snapshot is
+immutable and **every** code/config/Composer change changes that identity. A build
+ID alone does not disable normal config validation. Missing identity is an error;
+this optimization must never silently hide edits in a mutable installation.
 
-Deployments can include an explicit build identifier to force a new cache
-identity:
+Bundle extensions are pristine prototypes cloned for each builder. Runtime
+compilation copies the mutable definition/argument graph so console lint/debug
+can independently compile the source builder without reusing extension state or
+references to locators created in a different builder.
 
-```bash
-SYMPRESS_KERNEL_BUILD_ID=2026-06-13T120000Z
-```
-
-Operational notes:
-
-- Production deployments should clear `var/cache/<environment>/kernel` or set a
-  new `SYMPRESS_KERNEL_BUILD_ID` when bundle PHP source changes are deployed.
-- `SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES=1` restores source-file mtime/size
-  validation on runtime cache hits, but it reintroduces request-time filesystem
-  stats for every tracked source resource.
-- Configuration files and imported config resources are always validated on
-  cache hits because they directly affect service wiring.
-- The discovery manifest is safe for normal Composer-based deployments because
-  Composer metadata changes invalidate it. Manual edits inside `vendor/` without
-  Composer metadata changes require a kernel cache clear.
+A failed configuration/compiler/cache write aborts boot; the application resets
+its boot state and rethrows, without serving a stale container. The kernel error
+hook remains available and the built-in diagnostic logs class/location and a
+correlation identifier, excluding raw exception messages. The WordPress/PHP
+boundary determines the failure response (normally HTTP 500); operators can map
+it to a maintenance 503/retry policy. A readonly cache miss requires a writable
+private cache or explicit deployment warmup. Configure production PHP to hide
+exception text and monitor failed readiness before switching traffic.
 
 ## Environment Parameters
 

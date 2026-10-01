@@ -29,10 +29,23 @@ final class ContainerResourceFingerprinter
             (string) (int) $this->debug,
             $this->deploymentFingerprint(),
             $this->kernelFingerprint(),
-            ...$bundles->identityFingerprintParts(),
+
         ];
 
+        foreach ($bundles->all() as $bundle) {
+            $parts[] = implode(':', [$bundle->package(), $bundle->type(), $bundle->entry(), $bundle->path(), $bundle->bundle()->id()]);
+            if ($this->immutable()) {
+                continue;
+            }
+
+            $parts[] = $this->fileFingerprint($bundle->composerFile());
+        }
+
         foreach ($configFiles as $file) {
+            if ($this->immutable()) {
+                $parts[] = $file;
+                continue;
+            }
             $parts[] = sprintf(
                 '%s:%s',
                 $file,
@@ -108,6 +121,9 @@ final class ContainerResourceFingerprinter
         if (!is_array($resources) || $resources === []) {
             return false;
         }
+        if ($this->immutable()) {
+            return true;
+        }
 
         foreach ($resources as $path => $expected) {
             if (!is_string($path) || !is_string($expected)) {
@@ -165,8 +181,11 @@ final class ContainerResourceFingerprinter
 
     public function configResourcesAreFresh(mixed $resources): bool
     {
-        if (!is_array($resources) || $resources === []) {
+        if (!is_array($resources)) {
             return false;
+        }
+        if ($this->immutable()) {
+            return true;
         }
 
         foreach ($resources as $path => $expected) {
@@ -199,10 +218,54 @@ final class ContainerResourceFingerprinter
             ?? null;
 
         if ($value === null) {
-            return false;
+            return $this->tracksSourceChanges();
         }
 
         return filter_var($value, \FILTER_VALIDATE_BOOL, \FILTER_NULL_ON_FAILURE) === true;
+    }
+
+    public function immutable(): bool
+    {
+        $enabled = $_SERVER['SYMPRESS_KERNEL_IMMUTABLE_CACHE'] ?? $_ENV['SYMPRESS_KERNEL_IMMUTABLE_CACHE'] ?? getenv('SYMPRESS_KERNEL_IMMUTABLE_CACHE');
+        if (filter_var($enabled, FILTER_VALIDATE_BOOL) !== true) {
+            return false;
+        }
+        $build = defined('SYMPRESS_KERNEL_BUILD_ID') ? constant('SYMPRESS_KERNEL_BUILD_ID') : ($_SERVER['SYMPRESS_KERNEL_BUILD_ID'] ?? $_ENV['SYMPRESS_KERNEL_BUILD_ID'] ?? getenv('SYMPRESS_KERNEL_BUILD_ID'));
+        if (!is_string($build) || $build === '') {
+            throw new \RuntimeException('Immutable kernel cache requires an explicit deployment build ID.');
+        }
+        return true;
+    }
+
+    /**
+     * @param list<string> $directories
+     * @return array<string, string>
+     */
+    public function discoveryResourceManifest(array $directories): array
+    {
+        $resources = [];
+        foreach ($directories as $directory) {
+            foreach ([$directory, $directory . '/packages', $directory . '/packages/' . $this->environment] as $path) {
+                $resources[$path] = $this->sourceDirectoryMtime($path);
+            }
+        }
+        return $resources;
+    }
+
+    public function discoveryResourcesAreFresh(mixed $resources): bool
+    {
+        if (!is_array($resources)) {
+            return false;
+        }
+        if ($this->immutable()) {
+            return true;
+        }
+        foreach ($resources as $path => $expected) {
+            if (!is_string($path) || $this->sourceDirectoryMtime($path) !== $expected) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function resourceTrackingDisabled(): bool
@@ -234,20 +297,17 @@ final class ContainerResourceFingerprinter
             return 'missing';
         }
 
-        if ($this->tracksSourceChanges()) {
-            $hash = sha1_file($file);
+        clearstatcache(true, $file);
+        $hash = hash_file('sha256', $file);
 
-            return is_string($hash) ? $hash : 'unreadable';
-        }
-
-        return $this->sourceFileMtime($file);
+        return is_string($hash) ? $hash : 'unreadable';
     }
 
     private function deploymentFingerprint(): string
     {
         $buildId = defined('SYMPRESS_KERNEL_BUILD_ID')
             ? constant('SYMPRESS_KERNEL_BUILD_ID')
-            : getenv('SYMPRESS_KERNEL_BUILD_ID');
+            : ($_SERVER['SYMPRESS_KERNEL_BUILD_ID'] ?? $_ENV['SYMPRESS_KERNEL_BUILD_ID'] ?? getenv('SYMPRESS_KERNEL_BUILD_ID'));
 
         if ((is_scalar($buildId) || $buildId instanceof \Stringable) && (string) $buildId !== '') {
             return 'build:' . (string) $buildId;
@@ -273,7 +333,7 @@ final class ContainerResourceFingerprinter
                 '|',
                 [
                     $packageDir,
-                    sprintf('%s:%s', $composerFile, $this->fileFingerprint($composerFile)),
+                    $this->immutable() ? 'immutable' : sprintf('%s:%s', $composerFile, $this->fileFingerprint($composerFile)),
                 ],
             ),
         );
@@ -329,13 +389,20 @@ final class ContainerResourceFingerprinter
             return 'missing';
         }
 
-        return sprintf('dir:%s', (string) filemtime($directory));
+        clearstatcache(true, $directory);
+
+        return 'dir:' . hash('sha256', implode('\0', scandir($directory) ?: []));
     }
 
     private function sourceFileMtime(string $file): string
     {
         if (!is_file($file)) {
             return 'missing';
+        }
+
+        clearstatcache(true, $file);
+        if ($this->tracksSourceChanges()) {
+            return $this->fileFingerprint($file);
         }
 
         return sprintf('file:%s:%s', (string) filemtime($file), (string) filesize($file));

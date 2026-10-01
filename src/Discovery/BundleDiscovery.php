@@ -38,6 +38,9 @@ final class BundleDiscovery
     /** @var array<string, array<string, mixed>> */
     private array $metadata = [];
 
+    /** @var array<string, string> */
+    private array $metadataHashes = [];
+
     /** @param list<string>|array<string> $packagePrefixes Optional package-name prefixes used to narrow discovery. */
     public function __construct(
         private readonly ActivePackageResolver $resolver,
@@ -516,7 +519,14 @@ final class BundleDiscovery
 
         $decoded = json_decode($contents, true);
 
-        $this->metadata[$composerFile] = is_array($decoded) ? $this->stringKeyMap($decoded) : [];
+        $original = is_array($decoded) ? $this->stringKeyMap($decoded) : [];
+        $kernel = $this->kernelMetadata($original);
+        $this->metadata[$composerFile] = [
+            'name' => $original['name'] ?? '',
+            'type' => $original['type'] ?? '',
+            'extra' => ['kernel' => array_intersect_key($kernel, array_flip(['bundle', 'entry', 'requires']))],
+        ];
+        $this->metadataHashes[$composerFile] = hash('sha256', $contents);
 
         return $this->metadata[$composerFile];
     }
@@ -532,6 +542,7 @@ final class BundleDiscovery
         $cachedPackages = $cache->read();
 
         if ($cachedPackages !== null) {
+            $this->metadata = $cache->metadata();
             $this->packageNames = $cachedPackages;
 
             return $this->packageNames;
@@ -553,7 +564,7 @@ final class BundleDiscovery
         }
 
         sort($filtered);
-        $cache->write($filtered);
+        $cache->write($filtered, $this->metadata, $this->metadataHashes);
 
         $this->packageNames = $filtered;
 
