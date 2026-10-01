@@ -31,7 +31,7 @@
         "symfony/yaml": "^8.0"
     },
     "require-dev": {
-        "sympress/qa": "dev-main"
+        "sympress/qa": "^0.1.2"
     },
     "autoload": {
         "psr-4": {
@@ -48,7 +48,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-main": "1.0.x-dev"
+            "dev-main": "1.1.x-dev"
         }
     },
     "scripts": {
@@ -93,6 +93,6 @@
             }
         }
     ],
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "prefer-stable": true
 }
