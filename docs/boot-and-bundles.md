@@ -48,7 +48,10 @@ Composer discovery can be narrowed through the root `composer.json`:
 The kernel caches the matching Composer package manifest below
 `var/cache/<environment>/kernel`. Cache hits reuse the manifest instead of
 walking the full Composer installation, and the manifest is rebuilt when root or
-installed Composer metadata changes.
+installed or consumed package Composer metadata changes. Minimal bundle descriptors
+are cached, while activation filters remain request-specific. Both discovery and
+compiled containers honor APP_CACHE_DIR; see the private cache and immutable
+deployment policy in [dependency injection](dependency-injection.md#runtime-cache).
 
 For migration-heavy projects, `config/bundles.php` is also supported:
 

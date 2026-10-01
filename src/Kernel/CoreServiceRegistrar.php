@@ -20,6 +20,7 @@ use Symfony\Component\Config\ResourceCheckerInterface;
 use Symfony\Component\Config\Loader\LoaderInterface;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\DependencyInjection\AddConsoleCommandPass;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
@@ -89,6 +90,7 @@ final class CoreServiceRegistrar
         $this->registerRouteAttributes($builder);
         $builder->addCompilerPass(new HookCompilerPass());
         $builder->addCompilerPass(new RouteCompilerPass());
+        $builder->addCompilerPass(new AddConsoleCommandPass());
         $build($builder);
     }
 

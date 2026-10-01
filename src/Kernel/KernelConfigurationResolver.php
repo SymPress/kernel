@@ -18,13 +18,7 @@ final readonly class KernelConfigurationResolver
 
     public function cacheDir(): string
     {
-        $dir = $this->serverString('APP_CACHE_DIR');
-
-        if ($dir !== null) {
-            return sprintf('%s/kernel', $this->environmentDirectory($dir));
-        }
-
-        return sprintf('%s/var/cache/%s/kernel', $this->projectDir, $this->environment);
+        return CachePath::resolve($this->projectDir, $this->environment, $this->serverString('APP_CACHE_DIR'));
     }
 
     public function buildDir(): string
@@ -267,7 +261,7 @@ final readonly class KernelConfigurationResolver
 
     private function serverString(string $name): ?string
     {
-        $value = $_SERVER[$name] ?? $_ENV[$name] ?? null;
+        $value = $_SERVER[$name] ?? $_ENV[$name] ?? (getenv($name) === false ? null : getenv($name));
 
         if (!is_scalar($value) && !$value instanceof \Stringable) {
             return null;
@@ -289,7 +283,7 @@ final readonly class KernelConfigurationResolver
 
     private function serverValueIsFalse(string $name): bool
     {
-        $value = $_SERVER[$name] ?? $_ENV[$name] ?? null;
+        $value = $_SERVER[$name] ?? $_ENV[$name] ?? (getenv($name) === false ? null : getenv($name));
 
         if ($value === null) {
             return false;

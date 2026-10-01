@@ -18,6 +18,7 @@ final class EnvironmentParameterLoader
         'APP_SHARE_DIR',
         'KERNEL_PACKAGE_PREFIXES',
         'SYMPRESS_KERNEL_BUILD_ID',
+        'SYMPRESS_KERNEL_IMMUTABLE_CACHE',
         'SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES',
         'WP_ENV',
         'WP_ENVIRONMENT_TYPE',

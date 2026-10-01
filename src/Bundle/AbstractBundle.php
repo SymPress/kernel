@@ -125,7 +125,8 @@ abstract class AbstractBundle implements BundleInterface, ConfigurableExtensionI
             return;
         }
 
-        $container->registerExtension($extension);
+        // Extensions contain configuration state bound to one builder; retain the pristine bundle prototype.
+        $container->registerExtension(clone $extension);
     }
 
     public function boot(): void

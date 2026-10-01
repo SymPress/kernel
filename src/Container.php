@@ -150,6 +150,22 @@ final class Container implements SymfonyContainerInterface
     public function hydrateBuilder(): void
     {
         $this->hydrate($this->builder);
+        if ($this->builder->isCompiled()) {
+            return;
+        }
+
+        // ContainerBuilder::set removes definitions. Keep synthetic types available to lint/autowiring.
+        $this->registerSynthetic(self::CONTAINER_ID, self::class);
+        $this->registerSynthetic(self::CONFIG_ID, SiteConfig::class);
+        $this->registerSynthetic(self::CONTEXT_ID, WpContext::class);
+        if ($this->kernel instanceof KernelInterface) {
+            $this->registerSynthetic(self::KERNEL_ID, KernelInterface::class);
+        }
+        if (!($this->app instanceof App)) {
+            return;
+        }
+
+        $this->registerSynthetic(self::APP_ID, App::class);
     }
 
     public function set(string $id, ?object $service): void
