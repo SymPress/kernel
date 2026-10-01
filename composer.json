@@ -84,15 +84,6 @@
         },
         "sort-packages": true
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "./../*",
-            "options": {
-                "symlink": true
-            }
-        }
-    ],
     "minimum-stability": "stable",
     "prefer-stable": true
 }
