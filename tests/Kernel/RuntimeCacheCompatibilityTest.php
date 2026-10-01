@@ -17,6 +17,8 @@ use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\Process\Process;
 use SymPress\Kernel\Kernel\ContainerCacheManager;
+use Symfony\Component\Config\Resource\DirectoryResource;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\HttpKernel\KernelInterface as HttpKernelInterface;
 use Symfony\Component\DependencyInjection\Kernel\KernelInterface as DependencyInjectionKernelInterface;
 use Symfony\Component\HttpKernel\Bundle\BundleInterface as HttpBundleInterface;
@@ -24,6 +26,37 @@ use Symfony\Component\DependencyInjection\Kernel\BundleInterface as DependencyIn
 
 final class RuntimeCacheCompatibilityTest extends KernelTestCase
 {
+    public function testRecursiveDirectoryResourcesTrackContentsAdditionRemovalAndIgnoreSymlinkEscapes(): void
+    {
+        $root = $this->tmpPath('external-resources');
+        mkdir($root, 0700, true);
+        $file = $root . '/mapped.php';
+        file_put_contents($file, '<?php // first');
+        $outside = $this->tmpPath('unrelated.php');
+        file_put_contents($outside, '<?php // outside');
+        symlink($outside, $root . '/link.php');
+        $builder = new ContainerBuilder();
+        $builder->addResource(new DirectoryResource($root, '/\\.php$/D'));
+        $fingerprinter = new ContainerResourceFingerprinter($root, 'test', true);
+        $initial = $fingerprinter->configResourceManifest($builder, []);
+        self::assertTrue($fingerprinter->configResourcesAreFresh($initial));
+        file_put_contents($outside, '<?php // changed outside');
+        self::assertTrue($fingerprinter->configResourcesAreFresh($initial));
+        $mtime = filemtime($file);
+        file_put_contents($file, '<?php // other');
+        self::assertIsInt($mtime);
+        touch($file, $mtime);
+        self::assertFalse($fingerprinter->configResourcesAreFresh($initial));
+        $changed = $fingerprinter->refreshConfigResources($initial);
+        mkdir($root . '/nested', 0700);
+        file_put_contents($root . '/nested/new.php', '<?php // new');
+        self::assertFalse($fingerprinter->configResourcesAreFresh($changed));
+        $added = $fingerprinter->refreshConfigResources($changed);
+        unlink($root . '/nested/new.php');
+        self::assertFalse($fingerprinter->configResourcesAreFresh($added));
+        self::assertSame($changed, $fingerprinter->refreshConfigResources($added));
+    }
+
     public function testFrameworkLegacyKernelAliasIsTypeCompatible(): void
     {
         $kernel = $this->kernel($this->tmpPath('legacy-interface'));

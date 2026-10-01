@@ -120,13 +120,9 @@ final readonly class ContainerCacheManager
             $inputResources = $this->fingerprints->configResourceManifest($container->builder(), $configFiles);
             $knownResources = is_array($metadata) ? ($metadata['config_resources'] ?? []) : [];
             if (is_array($knownResources)) {
-                foreach (array_keys($knownResources) as $path) {
-                    if (!is_string($path) || str_starts_with($path, 'exists:')) {
-                        continue;
-                    }
-
-                    $inputResources[$path] = is_file($path) ? (hash_file('sha256', $path) ?: 'unreadable') : 'missing';
-                }
+                /** @var array<string, string> $knownConfigResources */
+                $knownConfigResources = $knownResources;
+                $inputResources = array_replace($inputResources, $this->fingerprints->refreshConfigResources($knownConfigResources));
             }
             ksort($inputResources);
             $cacheKey = substr(hash('sha256', "{$fingerprint}|{$sourceFingerprint}|" . serialize($inputResources)), 0, 16);
@@ -137,6 +133,19 @@ final readonly class ContainerCacheManager
             $runtime = $this->createRuntimeBuilder($container, $class);
             $runtime->compile(true);
             $configResources = $this->fingerprints->configResourceManifest($runtime, $configFiles);
+            // Compiler passes can discover resources outside the initial config inputs.
+            // Rebuild with the final identity so resolved container_class arguments stay coherent.
+            $finalKey = substr(hash('sha256', "{$fingerprint}|{$sourceFingerprint}|" . serialize($configResources)), 0, 16);
+            if ($finalKey !== $cacheKey) {
+                $cacheKey = $finalKey;
+                $class = sprintf('KernelContainer_%s', $cacheKey);
+                $containerFile = sprintf('%s/container_%s.php', $this->cacheDir, $cacheKey);
+                $runtime = $this->createRuntimeBuilder($container, $class);
+                $runtime->compile(true);
+                if ($configResources !== $this->fingerprints->configResourceManifest($runtime, $configFiles)) {
+                    throw new \RuntimeException('Container resources changed during compilation.');
+                }
+            }
             $dump = (new PhpDumper($runtime))->dump(
                 [
                     'class'               => $class,
