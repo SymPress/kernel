@@ -36,6 +36,9 @@ final class DefinitionCloner
         $copy->setFactory(is_array($factory) ? $this->values($factory) : $factory);
         $configurator = $source->getConfigurator();
         $copy->setConfigurator(is_array($configurator) ? $this->values($configurator) : $configurator);
+        // Setters track child overrides, including explicit null. Deep copying
+        // must preserve the source's inheritance choices rather than add changes.
+        $copy->setChanges($source->getChanges());
         return $copy;
     }
 
