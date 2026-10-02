@@ -7,6 +7,7 @@ namespace SymPress\Kernel\Discovery;
 use Composer\InstalledVersions;
 use SymPress\Kernel\Kernel\CachePath;
 use SymPress\Kernel\Kernel\ContainerResourceFingerprinter;
+use SymPress\Kernel\Kernel\ResourceFingerprint;
 
 final class KernelPackageManifestCache
 {
@@ -42,9 +43,6 @@ final class KernelPackageManifestCache
             return null;
         }
         try {
-            if (function_exists('opcache_invalidate')) {
-                opcache_invalidate($file, true);
-            }
             $metadata = require $file;
         } catch (\ParseError) {
             return null;
@@ -176,6 +174,7 @@ final class KernelPackageManifestCache
                     (string) $this->projectDir,
                     (string) $this->environment,
                     implode(',', $this->packagePrefixes),
+                    ResourceFingerprint::contentHashes() ? 'content' : 'metadata',
                     $this->immutable() ? 'immutable' : $this->fileFingerprint($this->rootComposerFile()),
                     $this->immutable() ? $this->buildIdentity() : $this->fileFingerprint($this->rootComposerLockFile()),
                     $this->immutable() ? 'immutable' : $this->fileFingerprint($this->installedPackagesFile()),
@@ -219,11 +218,6 @@ final class KernelPackageManifestCache
 
     private function fileFingerprint(string $file): string
     {
-        if ($file === '' || !is_file($file)) {
-            return 'missing';
-        }
-
-        clearstatcache(true, $file);
-        return hash_file('sha256', $file) ?: 'unreadable';
+        return ResourceFingerprint::file($file);
     }
 }

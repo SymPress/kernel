@@ -36,6 +36,7 @@ abstract class KernelTestCase extends TestCase
             $_ENV['DB_PASSWORD'],
             $_ENV['WP_AUTH_KEY'],
             $_SERVER['SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES'],
+            $_SERVER['SYMPRESS_KERNEL_CONTENT_HASHES'],
             $GLOBALS['kernel_test_do_actions'],
             $GLOBALS['kernel_test_filter_values'],
         );

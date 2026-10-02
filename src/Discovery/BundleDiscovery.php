@@ -8,6 +8,7 @@ use Composer\InstalledVersions;
 use SymPress\Kernel\Bundle\BundleInterface;
 use SymPress\Kernel\Bundle\BundleMetadata;
 use SymPress\Kernel\Bundle\BundleRegistry;
+use SymPress\Kernel\Kernel\ResourceFingerprint;
 use SymPress\Kernel\Resolver\ActivePackageResolver;
 use Symfony\Component\DependencyInjection\Kernel\RequiredBundle;
 
@@ -526,7 +527,7 @@ final class BundleDiscovery
             'type' => $original['type'] ?? '',
             'extra' => ['kernel' => array_intersect_key($kernel, array_flip(['bundle', 'entry', 'requires']))],
         ];
-        $this->metadataHashes[$composerFile] = hash('sha256', $contents);
+        $this->metadataHashes[$composerFile] = ResourceFingerprint::file($composerFile);
 
         return $this->metadata[$composerFile];
     }

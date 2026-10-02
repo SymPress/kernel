@@ -13,6 +13,9 @@ where applicable.
 
 ## Unreleased
 
+- Default mutable cache validation to mtime/size metadata; keep content hashing as an explicit `SYMPRESS_KERNEL_CONTENT_HASHES=1` mode. Warm container and discovery reads retain OPcache entries.
+- Verify upgrade from group-writable caches without executing or modifying prior metadata, discovery or container artifacts.
+
 ### Added
 
 - Bridge `App::enableDebug()` and `App::disableDebug()` to an optional profiler service.

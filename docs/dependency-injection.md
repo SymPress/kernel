@@ -990,7 +990,7 @@ wp console container:dump --format=yaml
 ## Runtime Cache
 
 Both debug and production use compiled-container cache hits. A hit loads recorded
-config paths from `meta.php`, validates consumed input content, and takes a shared
+config paths from `meta.php`, validates consumed input signatures, and takes a shared
 reader lock; it does not execute config loaders or rebuild discovery globs. Only
 misses take the exclusive writer lock and recheck after waiting. Writer metadata
 and container publication are atomic, private files use mode 0600, and newly
@@ -1009,13 +1009,15 @@ existing PHP dumps. Symlinked directories are rejected; private fallback directo
 owner-checked and never admit group/world writes. Keep configured cache parents trusted and outside
 DOCUMENT_ROOT/WP_CONTENT_DIR.
 
-Normal validation hashes root/package Composer metadata and consumed config contents,
-including imported files, so equal size/timestamp edits invalidate correctly. Top-level
-configuration is no longer hashed again in the deployment identity. Missing recorded
-config digests force a rebuild. This reduces work on each real warm request while
-retaining content checks across requests; a stat-only digest cache could miss same-timestamp edits.
-Recorded config directory entries detect newly added/deleted config files. Debug
-also hashes source contents. Production source changes require a new
+Normal validation compares modification time and size for root/package Composer
+metadata and consumed configuration, including imports. Warm requests do not read
+these file contents and do not invalidate OPcache entries; publication invalidates
+only files that were written. Missing recorded config signatures force a rebuild.
+Edits preserving both size and modification time require a cache clear or explicit
+`SYMPRESS_KERNEL_CONTENT_HASHES=1`. That opt-in mode hashes consumed inputs and debug
+source files, detects those edits, and has a distinct cache identity. Recorded
+config directory entries detect newly added/deleted config files. Debug tracks source
+metadata by default. Production source changes require a new
 `SYMPRESS_KERNEL_BUILD_ID`, a cache clear, or optional
 `SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES=1` (mtime/size source checks).
 
@@ -1196,7 +1198,8 @@ Useful debug points:
 
 Compiler-provided `DirectoryResource` inputs (for example external ORM entity
 paths) participate in mutable freshness checks and generated class identity.
-Recursive PHP resources hash contents, additions and removals in stable order;
+Recursive PHP resources compare file metadata, additions and removals in stable order
+(or content hashes with `SYMPRESS_KERNEL_CONTENT_HASHES=1`);
 child symlink files/directories are not followed outside the configured root.
 A cold build may compile twice when compiler-added resources change its initial
 identity. The second builder is fresh, uses the final `kernel.container_class`,

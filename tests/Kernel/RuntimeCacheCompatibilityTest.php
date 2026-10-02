@@ -7,6 +7,7 @@ namespace SymPress\Kernel\Tests\Kernel;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Kernel\CachePath;
 use SymPress\Kernel\Kernel\ContainerResourceFingerprinter;
+use SymPress\Kernel\Kernel\ResourceFingerprint;
 use SymPress\Kernel\Kernel\SiteKernel;
 use SymPress\Kernel\Kernel\KernelConfigurationResolver;
 use SymPress\Kernel\Tests\Support\TestSiteConfig;
@@ -28,6 +29,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
 {
     public function testRecursiveDirectoryResourcesTrackContentsAdditionRemovalAndIgnoreSymlinkEscapes(): void
     {
+        $_SERVER['SYMPRESS_KERNEL_CONTENT_HASHES'] = '1';
         $root = $this->tmpPath('external-resources');
         mkdir($root, 0700, true);
         $file = $root . '/mapped.php';
@@ -170,6 +172,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
 
     public function testDebugHitSkipsConfigExecutionAndDetectsSameTimestampEdits(): void
     {
+        $_SERVER['SYMPRESS_KERNEL_CONTENT_HASHES'] = '1';
         $project = $this->tmpPath('debug-cache');
         mkdir($project . '/config', 0700, true);
         $file = $project . '/config/services.php';
@@ -196,6 +199,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
 
     public function testImportedSameTimestampEditRebuildsActualParameter(): void
     {
+        $_SERVER['SYMPRESS_KERNEL_CONTENT_HASHES'] = '1';
         $project = $this->tmpPath('import-content');
         mkdir($project . '/config', 0700, true);
         $this->writeImportingConfig($project . '/config/services.php', 'first');
@@ -453,6 +457,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
 
     public function testPackageDescriptorsReuseAcrossRequestsAndInvalidateConsumedContent(): void
     {
+        $_SERVER['SYMPRESS_KERNEL_CONTENT_HASHES'] = '1';
         $project = $this->tmpPath('descriptor-cache');
         mkdir($project, 0700);
         file_put_contents($project . '/composer.json', '{}');
@@ -461,7 +466,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $stamp = filemtime($input);
         $cache = new KernelPackageManifestCache($project, 'test', ['sympress/']);
         $descriptors = [$input => ['name' => 'sympress/one', 'type' => 'library', 'extra' => ['kernel' => ['bundle' => 'Example']]]];
-        $cache->write(['sympress/one'], $descriptors, [$input => hash_file('sha256', $input)]);
+        $cache->write(['sympress/one'], $descriptors, [$input => ResourceFingerprint::file($input)]);
         $nextRequest = new KernelPackageManifestCache($project, 'test', ['sympress/']);
         self::assertSame(['sympress/one'], $nextRequest->read());
         self::assertSame($descriptors, $nextRequest->metadata());
