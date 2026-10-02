@@ -11,7 +11,7 @@ where applicable.
 - Validate consumed configuration content once per mutable warm request while preserving same-timestamp edits, imported resources and the explicit immutable build-ID policy.
 - Boot existing installations with group-writable compiled-cache directories through a fresh private generation without executing or chmod-adopting prior PHP cache artifacts.
 
-## Unreleased
+## 1.1.3 — 2026-10-02
 
 - Default mutable cache validation to mtime/size metadata; keep content hashing as an explicit `SYMPRESS_KERNEL_CONTENT_HASHES=1` mode. Warm container and discovery reads retain OPcache entries.
 - Verify upgrade from group-writable caches without executing or modifying prior metadata, discovery or container artifacts.
