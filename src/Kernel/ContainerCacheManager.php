@@ -319,7 +319,17 @@ final readonly class ContainerCacheManager
             return false;
         }
 
-        if (!$this->fingerprints->configResourcesAreFresh($metadata['config_resources'] ?? null)) {
+        $configResources = $metadata['config_resources'] ?? null;
+        $configFiles = $metadata['runtime_config_files'] ?? null;
+        if (!is_array($configFiles) || !is_array($configResources)) {
+            return false;
+        }
+        foreach ($configFiles as $file) {
+            if (!is_string($file) || !is_string($configResources[$file] ?? null)) {
+                return false;
+            }
+        }
+        if (!$this->fingerprints->configResourcesAreFresh($configResources)) {
             return false;
         }
 

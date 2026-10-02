@@ -1003,12 +1003,17 @@ precedence over dotenv ENV values, then getenv. Relative values resolve under th
 project. The default is `var/cache/<environment>/kernel`; an unwritable cold
 project or a web-exposed default uses a private per-user/project temporary cache.
 An explicitly configured web-exposed cache is rejected. Existing read-only warm
-caches can still be read. Symlinked cache directories and writable-by-other-user
-cache directories are rejected. Keep configured cache parents trusted and outside
+caches can still be read. Existing group/world-writable cache directories use the private
+fallback so older group-writable installations can boot without trusting or modifying their
+existing PHP dumps. Symlinked directories are rejected; private fallback directories remain
+owner-checked and never admit group/world writes. Keep configured cache parents trusted and outside
 DOCUMENT_ROOT/WP_CONTENT_DIR.
 
-Normal validation hashes root/package Composer metadata and config contents,
-including imported files, so equal size/timestamp edits invalidate correctly.
+Normal validation hashes root/package Composer metadata and consumed config contents,
+including imported files, so equal size/timestamp edits invalidate correctly. Top-level
+configuration is no longer hashed again in the deployment identity. Missing recorded
+config digests force a rebuild. This reduces work on each real warm request while
+retaining content checks across requests; a stat-only digest cache could miss same-timestamp edits.
 Recorded config directory entries detect newly added/deleted config files. Debug
 also hashes source contents. Production source changes require a new
 `SYMPRESS_KERNEL_BUILD_ID`, a cache clear, or optional
