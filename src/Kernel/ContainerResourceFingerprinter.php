@@ -42,17 +42,10 @@ final class ContainerResourceFingerprinter
             $parts[] = $this->fileFingerprint($bundle->composerFile());
         }
 
-        foreach ($configFiles as $file) {
-            if ($this->immutable()) {
-                $parts[] = $file;
-                continue;
-            }
-            $parts[] = sprintf(
-                '%s:%s',
-                $file,
-                is_file($file) ? $this->fileFingerprint($file) : 'missing',
-            );
-        }
+        // Consumed config contents (including imports) are validated separately by
+        // configResourcesAreFresh and participate in the compiled generation key.
+        // Keep only discovery identity here to avoid reading each config twice on hits.
+        array_push($parts, ...$configFiles);
 
         return hash('sha256', implode('|', $parts));
     }

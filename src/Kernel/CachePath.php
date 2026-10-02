@@ -26,6 +26,11 @@ final class CachePath
                 return self::privateFallback($project, $environment);
             }
         }
+        // Existing group-writable PHP dumps may already have been replaced. Never
+        // adopt them by chmod; start a fresh generation in the private fallback.
+        if (!is_link($path) && is_dir($path) && (fileperms($path) & 0022) !== 0) {
+            return self::privateFallback($project, $environment);
+        }
         if ($configured === null && !is_file($path . '/meta.php') && !self::writableAncestor($path)) {
             return self::privateFallback($project, $environment);
         }
