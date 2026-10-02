@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.2 — 2026-10-02
+
+- Validate consumed configuration content once per mutable warm request while preserving same-timestamp edits, imported resources and the explicit immutable build-ID policy.
+- Boot existing installations with group-writable compiled-cache directories through a fresh private generation without executing or chmod-adopting prior PHP cache artifacts.
+
 ## Unreleased
 
 ### Added
