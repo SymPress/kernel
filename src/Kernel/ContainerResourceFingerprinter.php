@@ -28,6 +28,7 @@ final class ContainerResourceFingerprinter
             $this->projectDir,
             $this->environment,
             (string) (int) $this->debug,
+            ResourceFingerprint::contentHashes() ? 'content' : 'metadata',
             $this->deploymentFingerprint(),
             $this->kernelFingerprint(),
 
@@ -42,7 +43,7 @@ final class ContainerResourceFingerprinter
             $parts[] = $this->fileFingerprint($bundle->composerFile());
         }
 
-        // Consumed config contents (including imports) are validated separately by
+        // Consumed config signatures (including imports) are validated separately by
         // configResourcesAreFresh and participate in the compiled generation key.
         // Keep only discovery identity here to avoid reading each config twice on hits.
         array_push($parts, ...$configFiles);
@@ -336,14 +337,7 @@ final class ContainerResourceFingerprinter
 
     private function fileFingerprint(string $file): string
     {
-        if (!is_file($file)) {
-            return 'missing';
-        }
-
-        clearstatcache(true, $file);
-        $hash = hash_file('sha256', $file);
-
-        return is_string($hash) ? $hash : 'unreadable';
+        return ResourceFingerprint::file($file);
     }
 
     private function deploymentFingerprint(): string

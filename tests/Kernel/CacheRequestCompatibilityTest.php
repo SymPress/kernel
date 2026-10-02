@@ -6,6 +6,7 @@ namespace SymPress\Kernel\Tests\Kernel;
 
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Kernel\CachePath;
+use SymPress\Kernel\Discovery\KernelPackageManifestCache;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
@@ -18,9 +19,16 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
         mkdir($directory, 0775, true);
         chmod($directory, 0775);
         file_put_contents($directory . '/meta.php', '<?php throw new \\RuntimeException("Untrusted old cache was executed");');
+        file_put_contents($directory . '/discovery-packages.php', '<?php throw new \\RuntimeException("Untrusted old discovery was executed");');
+        file_put_contents($directory . '/container_0123456789abcdef.php', '<?php throw new \\RuntimeException("Untrusted old container was executed");');
+        $old = hash_file('sha256', $directory . '/meta.php');
         $cache = CachePath::resolve($project, 'test');
         self::assertNotSame($directory, $cache);
         self::assertSame($cache, CachePath::resolve($project, 'test', $project . '/var/cache'));
+        $discovery = new KernelPackageManifestCache($project, 'test', ['sympress/']);
+        self::assertNull($discovery->read());
+        $discovery->write(['sympress/kernel']);
+        self::assertSame(['sympress/kernel'], $discovery->read());
         $kernel = $this->kernel($project);
         $container = $kernel->createContainer();
         $files = $kernel->configureContainer($container->builder(), $container, new BundleRegistry());
@@ -28,10 +36,12 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
         self::assertTrue($kernel->tryUseRuntimeContainer($kernel->createContainer(), new BundleRegistry()));
         self::assertSame(0700, fileperms($cache) & 0777);
         self::assertSame(0775, fileperms($directory) & 0777);
+        self::assertSame($old, hash_file('sha256', $directory . '/meta.php'));
+        self::assertSame(0600, fileperms($cache . '/discovery-packages.php') & 0777);
         (new Filesystem())->remove($cache);
     }
 
-    public function testSuccessiveRequestsHashConfigOnceAndDetectSameTimestampReplacement(): void
+    public function testSuccessiveRequestsUseMetadataWithoutHashesOrOpcacheInvalidation(): void
     {
         $project = $this->tmpPath('request-hashes');
         mkdir($project . '/config', 0700, true);
@@ -46,12 +56,40 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
         foreach (range(1, 2) as $unused) {
             $request = $run();
             self::assertTrue($request['hit']);
-            self::assertSame(1, $request['hashes'][$file]);
+            self::assertSame([], $request['hashes']);
+            self::assertSame(0, $request['bytes']);
+            self::assertSame(0, $request['invalidations']);
         }
         $stamp = filemtime($file);
         $this->writeConfig($file . '.new', 'other');
         touch($file . '.new', $stamp);
         rename($file . '.new', $file);
+        $request = $run();
+        self::assertTrue($request['hit']);
+        self::assertSame('first', $request['value']);
+        touch($file, $stamp + 1);
+        $request = $run();
+        self::assertFalse($request['hit']);
+        self::assertSame('other', $request['value']);
+    }
+
+    public function testExplicitContentModeDetectsSameSizeSameTimestampReplacement(): void
+    {
+        $project = $this->tmpPath('request-content-hashes');
+        mkdir($project . '/config', 0700, true);
+        $file = $project . '/config/services.php';
+        $this->writeConfig($file, 'first');
+        $run = static function () use ($project): array {
+            $process = new Process([PHP_BINARY, dirname(__DIR__) . '/Fixtures/cache-request.php', $project], env: ['SYMPRESS_KERNEL_CONTENT_HASHES' => '1']);
+            $process->mustRun();
+
+            return json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        };
+        self::assertFalse($run()['hit']);
+        self::assertTrue($run()['hit']);
+        $stamp = filemtime($file);
+        $this->writeConfig($file, 'other');
+        touch($file, $stamp);
         $request = $run();
         self::assertFalse($request['hit']);
         self::assertSame('other', $request['value']);

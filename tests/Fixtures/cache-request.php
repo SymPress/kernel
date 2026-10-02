@@ -18,4 +18,4 @@ if (!$hit) {
     $files = $kernel->configureContainer($container->builder(), $container, $bundles);
     $kernel->createRuntimeContainer($container, $bundles, $files);
 }
-echo json_encode(['hit' => $hit, 'hashes' => $GLOBALS['cache_request_hashes'] ?? [], 'bytes' => $GLOBALS['cache_request_bytes'] ?? 0, 'milliseconds' => (hrtime(true) - $start) / 1e6, 'value' => $container->getParameter('imported.value')], JSON_THROW_ON_ERROR);
+echo json_encode(['hit' => $hit, 'hashes' => $GLOBALS['cache_request_hashes'] ?? [], 'bytes' => $GLOBALS['cache_request_bytes'] ?? 0, 'invalidations' => $GLOBALS['cache_request_invalidations'] ?? 0, 'milliseconds' => (hrtime(true) - $start) / 1e6, 'value' => $container->getParameter('imported.value')], JSON_THROW_ON_ERROR);

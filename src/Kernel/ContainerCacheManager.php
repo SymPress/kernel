@@ -212,9 +212,6 @@ final readonly class ContainerCacheManager
             return null;
         }
         try {
-            if (function_exists('opcache_invalidate')) {
-                opcache_invalidate($file, true);
-            }
             $metadata = require $file;
             return is_array($metadata) ? $metadata : null;
         } catch (\ParseError) {
