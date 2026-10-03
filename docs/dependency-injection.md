@@ -1000,19 +1000,25 @@ owned generations plus a one-hour grace period and never deletes unowned files.
 
 `APP_CACHE_DIR` is honored by both discovery and compilation. Server values take
 precedence over dotenv ENV values, then getenv. Relative values resolve under the
-project. The default is `var/cache/<environment>/kernel`; an unwritable cold
-project or a web-exposed default uses a private per-user/project temporary cache.
-An explicitly configured web-exposed cache is rejected. Existing read-only warm
-caches can still be read. Existing group/world-writable cache directories use the private
-fallback so older group-writable installations can boot without trusting or modifying their
-existing PHP dumps. Symlinked directories are rejected; private fallback directories remain
-owner-checked and never admit group/world writes. Keep configured cache parents trusted and outside
-DOCUMENT_ROOT/WP_CONTENT_DIR.
+project. The default is `var/cache/<environment>/kernel`. Existing read-only warm
+caches can still be read. An implicit legacy group/world-writable cache migrates to
+durable project storage at `var/cache-private-<uid>/<environment>/kernel` without
+executing or modifying old PHP dumps; creation logs the selected path once. This
+path is shared by CLI and PHP-FPM even with systemd PrivateTmp. An explicit unsafe
+`APP_CACHE_DIR`, a web-exposed default or an unwritable cold project fails with an
+actionable diagnostic instead of silently selecting another cache. Symlinked
+directories are rejected; private migration directories are owner-checked and
+never admit group/world writes. Provision an explicit durable private cache with
+the same CLI/PHP-FPM identity and mode 0700, run production cache warmup and
+`lint:container` under that identity, then verify a request before switching traffic.
+Keep configured cache parents trusted and outside DOCUMENT_ROOT/WP_CONTENT_DIR.
 
 Normal validation compares modification time and size for root/package Composer
 metadata and consumed configuration, including imports. Warm requests do not read
-these file contents and do not invalidate OPcache entries; publication invalidates
-only files that were written. Missing recorded config signatures force a rebuild.
+these file contents. Mutable metadata/discovery reads invalidate their PHP OPcache
+entries before loading, so atomic replacement remains visible with timestamp
+validation disabled; immutable build-ID policy retains those entries. Publication
+also invalidates files that were written. Missing recorded config signatures force a rebuild.
 Edits preserving both size and modification time require a cache clear or explicit
 `SYMPRESS_KERNEL_CONTENT_HASHES=1`. That opt-in mode hashes consumed inputs and debug
 source files, detects those edits, and has a distinct cache identity. Recorded
