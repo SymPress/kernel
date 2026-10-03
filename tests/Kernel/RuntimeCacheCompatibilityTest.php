@@ -255,14 +255,14 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         }
     }
 
-    public function testPublicDefaultFallsBackAndExplicitPublicCacheIsRejected(): void
+    public function testPublicDefaultRequiresAnExplicitPrivateCache(): void
     {
         $project = $this->tmpPath('public-cache');
         $_SERVER['DOCUMENT_ROOT'] = $project;
         try {
-            self::assertStringStartsWith(sys_get_temp_dir() . '/sympress-kernel-', CachePath::resolve($project, 'test'));
             $this->expectException(\RuntimeException::class);
-            CachePath::resolve($project, 'test', $project . '/var/cache');
+            $this->expectExceptionMessage('APP_CACHE_DIR');
+            CachePath::resolve($project, 'test');
         } finally {
             unset($_SERVER['DOCUMENT_ROOT']);
         }

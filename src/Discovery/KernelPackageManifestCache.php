@@ -43,6 +43,9 @@ final class KernelPackageManifestCache
             return null;
         }
         try {
+            if (!$this->immutable() && function_exists('opcache_invalidate')) {
+                opcache_invalidate($file, true);
+            }
             $metadata = require $file;
         } catch (\ParseError) {
             return null;

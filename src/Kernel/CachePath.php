@@ -29,6 +29,9 @@ final class CachePath
         // Existing group-writable PHP dumps may already have been replaced. Never
         // adopt them by chmod; start a fresh generation in the private fallback.
         if (!is_link($path) && is_dir($path) && (fileperms($path) & 0022) !== 0) {
+            if ($configured !== null) {
+                throw new \RuntimeException('APP_CACHE_DIR contains a group/world-writable kernel directory. Configure a durable private directory, create it as the PHP-FPM user with mode 0700, and run cache warmup as that same user.');
+            }
             return self::privateFallback($project, $environment);
         }
         if ($configured === null && !is_file($path . '/meta.php') && !self::writableAncestor($path)) {
@@ -71,12 +74,25 @@ final class CachePath
     private static function privateFallback(string $project, string $environment): string
     {
         $user = function_exists('posix_geteuid') ? (string) posix_geteuid() : hash('sha256', get_current_user());
-        $root = sys_get_temp_dir() . '/sympress-kernel-' . $user;
+        $root = $project . '/var/cache-private-' . $user;
+        $resolved = self::canonical($root);
+        foreach ([$_SERVER['DOCUMENT_ROOT'] ?? null, defined('WP_CONTENT_DIR') ? constant('WP_CONTENT_DIR') : null] as $public) {
+            if (is_string($public) && $public !== '' && ($resolved === self::canonical($public) || str_starts_with($resolved, rtrim(self::canonical($public), '/') . '/'))) {
+                throw new \RuntimeException('No private kernel cache is available outside the webroot. Set APP_CACHE_DIR to a durable private directory and warm it as the PHP-FPM user.');
+            }
+        }
+        $created = !is_dir($root);
+        if ($created && !self::writableAncestor($root)) {
+            throw new \RuntimeException('The private kernel cache cannot be created. Set APP_CACHE_DIR to a durable directory shared by CLI and PHP-FPM, create it with mode 0700, and warm it as the PHP-FPM user.');
+        }
         self::ensureDirectory($root);
         if (function_exists('posix_geteuid') && fileowner($root) !== posix_geteuid()) {
-            throw new \RuntimeException('The private temporary cache root belongs to another user.');
+            throw new \RuntimeException('The private kernel cache root belongs to another user; configure APP_CACHE_DIR for the PHP-FPM identity.');
         }
-        return $root . '/' . substr(hash('sha256', $project), 0, 24) . '/' . $environment . '/kernel';
+        if ($created) {
+            error_log('SymPress migrated its implicit kernel cache to ' . $root . '. Configure APP_CACHE_DIR for a shared deployment cache and warm it as the PHP-FPM user.');
+        }
+        return $root . '/' . $environment . '/kernel';
     }
 
     private static function writableAncestor(string $path): bool

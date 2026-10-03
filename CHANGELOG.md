@@ -6,15 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
-## 1.1.2 — 2026-10-02
+## Unreleased
 
-- Validate consumed configuration content once per mutable warm request while preserving same-timestamp edits, imported resources and the explicit immutable build-ID policy.
-- Boot existing installations with group-writable compiled-cache directories through a fresh private generation without executing or chmod-adopting prior PHP cache artifacts.
+- Fail unsafe explicit APP_CACHE_DIR settings with deployment guidance and migrate implicit legacy caches once into visible durable project storage shared by CLI/PHP-FPM.
+- Refresh mutable metadata/discovery OPcache reads after atomic replacement while retaining immutable build-ID cache behavior.
+- Admit the stable SYMPRESS_PROJECT_DIR cache identity as a safe environment parameter without changing active release discovery.
 
 ## 1.1.3 — 2026-10-02
 
 - Default mutable cache validation to mtime/size metadata; keep content hashing as an explicit `SYMPRESS_KERNEL_CONTENT_HASHES=1` mode. Warm container and discovery reads retain OPcache entries.
 - Verify upgrade from group-writable caches without executing or modifying prior metadata, discovery or container artifacts.
+
+## 1.1.2 — 2026-10-02
+
+- Validate consumed configuration content once per mutable warm request while preserving same-timestamp edits, imported resources and the explicit immutable build-ID policy.
+- Boot existing installations with group-writable compiled-cache directories through a fresh private generation without executing or chmod-adopting prior PHP cache artifacts.
 
 ### Added
 

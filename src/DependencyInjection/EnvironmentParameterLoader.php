@@ -20,6 +20,7 @@ final class EnvironmentParameterLoader
         'SYMPRESS_KERNEL_BUILD_ID',
         'SYMPRESS_KERNEL_IMMUTABLE_CACHE',
         'SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES',
+        'SYMPRESS_PROJECT_DIR',
         'WP_ENV',
         'WP_ENVIRONMENT_TYPE',
         'WORDPRESS_ENV',
