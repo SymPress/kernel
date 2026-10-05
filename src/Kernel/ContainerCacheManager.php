@@ -32,7 +32,7 @@ final readonly class ContainerCacheManager
         array $runtimeConfigFiles,
     ): bool {
 
-        $metaFile = sprintf('%s/meta.php', $this->cacheDir);
+        $metaFile = sprintf('%s/meta.json', $this->cacheDir);
         $lockFile = sprintf('%s/container.lock', $this->cacheDir);
         if (
             !is_file($metaFile) || !is_file($lockFile) || is_link($metaFile) || is_link($lockFile)
@@ -80,7 +80,7 @@ final readonly class ContainerCacheManager
 
         $filesystem = new Filesystem();
         CachePath::ensureDirectory($this->cacheDir);
-        $metaFile = sprintf('%s/meta.php', $this->cacheDir);
+        $metaFile = sprintf('%s/meta.json', $this->cacheDir);
         $lockFile = sprintf('%s/container.lock', $this->cacheDir);
         $fingerprint = $this->fingerprints->fingerprint($bundles, $configFiles);
         if (is_link($lockFile)) {
@@ -166,10 +166,8 @@ final readonly class ContainerCacheManager
                 chmod($containerFile, 0600);
                 $filesystem->dumpFile(
                     $metaFile,
-                    sprintf(
-                        "<?php\n\nreturn %s;\n",
-                        var_export(
-                            [
+                    json_encode(
+                        [
                             'fingerprint'        => $fingerprint,
                             'runtime_config_files' => $configFiles,
                             'config_discovery' => $this->fingerprints->discoveryResourceManifest($configDirectories),
@@ -178,15 +176,13 @@ final readonly class ContainerCacheManager
                             'source_resources'   => $sourceResources,
                             'class'              => $class,
                             'file'               => basename($containerFile),
-                            ],
-                            true,
-                        ),
+                        ],
+                        JSON_THROW_ON_ERROR,
                     ),
                 );
 
                 chmod($metaFile, 0600);
                 if (function_exists('opcache_invalidate')) {
-                    opcache_invalidate($metaFile, true);
                     opcache_invalidate($containerFile, true);
                 }
             } finally {
@@ -212,12 +208,10 @@ final readonly class ContainerCacheManager
             return null;
         }
         try {
-            if (!$this->fingerprints->immutable() && function_exists('opcache_invalidate')) {
-                opcache_invalidate($file, true);
-            }
-            $metadata = require $file;
+            $contents = file_get_contents($file);
+            $metadata = $contents === false ? null : json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
             return is_array($metadata) ? $metadata : null;
-        } catch (\ParseError) {
+        } catch (\JsonException) {
             return null;
         }
     }

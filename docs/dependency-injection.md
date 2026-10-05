@@ -990,7 +990,7 @@ wp console container:dump --format=yaml
 ## Runtime Cache
 
 Both debug and production use compiled-container cache hits. A hit loads recorded
-config paths from `meta.php`, validates consumed input signatures, and takes a shared
+config paths from `meta.json`, validates consumed input signatures, and takes a shared
 reader lock; it does not execute config loaders or rebuild discovery globs. Only
 misses take the exclusive writer lock and recheck after waiting. Writer metadata
 and container publication are atomic, private files use mode 0600, and newly
@@ -1004,21 +1004,29 @@ project. The default is `var/cache/<environment>/kernel`. Existing read-only war
 caches can still be read. An implicit legacy group/world-writable cache migrates to
 durable project storage at `var/cache-private-<uid>/<environment>/kernel` without
 executing or modifying old PHP dumps; creation logs the selected path once. This
-path is shared by CLI and PHP-FPM even with systemd PrivateTmp. An explicit unsafe
-`APP_CACHE_DIR`, a web-exposed default or an unwritable cold project fails with an
-actionable diagnostic instead of silently selecting another cache. Symlinked
-directories are rejected; private migration directories are owner-checked and
-never admit group/world writes. Provision an explicit durable private cache with
+path is shared by CLI and PHP-FPM even with systemd PrivateTmp. If the project is
+the webroot or a cold project cannot be written, the implicit cache uses a
+project-specific, owner-checked directory under the system temporary directory,
+outside DOCUMENT_ROOT/WP_CONTENT_DIR. Pre-created symlinks, other owners and
+group/world-writable directories are rejected. This fallback restores automatic
+boot for classic and read-only WordPress projects; it is not a shared deployment
+cache when CLI and FPM have different users or PrivateTmp namespaces. An explicit
+unsafe `APP_CACHE_DIR` still fails with an actionable diagnostic. Provision an
+explicit durable private cache with
 the same CLI/PHP-FPM identity and mode 0700, run production cache warmup and
 `lint:container` under that identity, then verify a request before switching traffic.
 Keep configured cache parents trusted and outside DOCUMENT_ROOT/WP_CONTENT_DIR.
 
 Normal validation compares modification time and size for root/package Composer
 metadata and consumed configuration, including imports. Warm requests do not read
-these file contents. Mutable metadata/discovery reads invalidate their PHP OPcache
-entries before loading, so atomic replacement remains visible with timestamp
-validation disabled; immutable build-ID policy retains those entries. Publication
-also invalidates files that were written. Missing recorded config signatures force a rebuild.
+these file contents. Container metadata and discovery descriptors are atomic JSON
+files (`meta.json` and `discovery-packages.json`), so their replacement by a CLI
+writer is visible to existing FPM workers even with OPcache timestamp validation
+disabled. Unchanged mutable and immutable readers do not invalidate OPcache.
+Compiled containers remain PHP files with generation-specific names; writers
+invalidate only the compiled PHP file they publish. Legacy `meta.php` and
+`discovery-packages.php` are ignored and rebuilt once without executing them.
+Missing recorded config signatures force a rebuild.
 Edits preserving both size and modification time require a cache clear or explicit
 `SYMPRESS_KERNEL_CONTENT_HASHES=1`. That opt-in mode hashes consumed inputs and debug
 source files, detects those edits, and has a distinct cache identity. Recorded
@@ -1044,8 +1052,9 @@ its boot state and rethrows, without serving a stale container. The kernel error
 hook remains available and the built-in diagnostic logs class/location and a
 correlation identifier, excluding raw exception messages. The WordPress/PHP
 boundary determines the failure response (normally HTTP 500); operators can map
-it to a maintenance 503/retry policy. A readonly cache miss requires a writable
-private cache or explicit deployment warmup. Configure production PHP to hide
+it to a maintenance 503/retry policy. An explicit read-only cache miss requires
+deployment warmup or a writable private cache; implicit cold paths may use the
+private fallback described above. Configure production PHP to hide
 exception text and monitor failed readiness before switching traffic.
 
 ## Environment Parameters
@@ -1138,7 +1147,7 @@ Useful debug points:
 
 - `kernel.container_configured`, to inspect loaded configuration files.
 - `kernel.container_ready`, to inspect the runtime container.
-- `var/cache/<env>/kernel/meta.php`, to inspect fingerprint, class, and cache
+- `var/cache/<env>/kernel/meta.json`, to inspect fingerprint, class, and cache
   file metadata.
 - The showcase plugin screen for attributes, locators, tags, and lazy services.
 
