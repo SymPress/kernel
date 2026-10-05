@@ -17,6 +17,7 @@ use SymPress\Kernel\Bundle\AbstractBundle;
 use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Filesystem\Filesystem;
 use SymPress\Kernel\Kernel\ContainerCacheManager;
 use Symfony\Component\Config\Resource\DirectoryResource;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -255,14 +256,16 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         }
     }
 
-    public function testPublicDefaultRequiresAnExplicitPrivateCache(): void
+    public function testPublicDefaultAutomaticallyUsesPrivateCacheOutsideWebroot(): void
     {
         $project = $this->tmpPath('public-cache');
         $_SERVER['DOCUMENT_ROOT'] = $project;
         try {
-            $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('APP_CACHE_DIR');
-            CachePath::resolve($project, 'test');
+            $path = CachePath::resolve($project, 'test');
+            self::assertFalse(str_starts_with(CachePath::canonical($path), CachePath::canonical($project) . '/'));
+            CachePath::ensureDirectory($path);
+            self::assertSame(0700, fileperms($path) & 0777);
+            (new Filesystem())->remove(dirname($path, 2));
         } finally {
             unset($_SERVER['DOCUMENT_ROOT']);
         }
@@ -326,7 +329,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $container = $kernel->createContainer();
         $files = $kernel->configureContainer($container->builder(), $container, new BundleRegistry());
         $kernel->createRuntimeContainer($container, new BundleRegistry(), $files);
-        file_put_contents($project . '/var/cache/test/kernel/meta.php', '<?php broken syntax');
+        file_put_contents($project . '/var/cache/test/kernel/meta.json', '{ broken syntax');
         self::assertFalse($kernel->tryUseRuntimeContainer($kernel->createContainer(), new BundleRegistry()));
         file_put_contents($file, '<?php throw new \RuntimeException("configuration failure");');
         try {
@@ -348,11 +351,11 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $container = $kernel->createContainer();
         $files = $kernel->configureContainer($container->builder(), $container, $registry);
         $kernel->createRuntimeContainer($container, $registry, $files);
-        $path = $project . '/var/cache/test/kernel/meta.php';
+        $path = $project . '/var/cache/test/kernel/meta.json';
         foreach ([[0 => 'malformed'], ['invalid' => ['nested']]] as $resources) {
-            $metadata = require $path;
+            $metadata = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
             $metadata['config_resources'] = $resources;
-            file_put_contents($path, '<?php return ' . var_export($metadata, true) . ';');
+            file_put_contents($path, json_encode($metadata, JSON_THROW_ON_ERROR));
             $rebuilt = $kernel->createContainer();
             self::assertFalse($kernel->tryUseRuntimeContainer($rebuilt, $registry));
             $files = $kernel->configureContainer($rebuilt->builder(), $rebuilt, $registry);
@@ -470,7 +473,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $nextRequest = new KernelPackageManifestCache($project, 'test', ['sympress/']);
         self::assertSame(['sympress/one'], $nextRequest->read());
         self::assertSame($descriptors, $nextRequest->metadata());
-        self::assertSame(0600, fileperms($project . '/var/cache/test/kernel/discovery-packages.php') & 0777);
+        self::assertSame(0600, fileperms($project . '/var/cache/test/kernel/discovery-packages.json') & 0777);
         file_put_contents($input, '{"name":"sympress/two"}');
         touch($input, $stamp);
         self::assertNull((new KernelPackageManifestCache($project, 'test', ['sympress/']))->read());

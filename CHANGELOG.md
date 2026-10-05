@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
-## Unreleased
+## 1.1.5 — 2026-10-05
+
+- Store container metadata and discovery descriptors as atomic private JSON, so unchanged readers retain OPcache entries while CLI publications remain visible to existing FPM workers with timestamp validation disabled. Ignore and rebuild legacy PHP metadata without executing it.
+- Restore automatic private-cache fallback outside served directories for classic WordPress webroots and cold read-only projects; reject pre-created symlinks, foreign owners and writable shared cache roots.
+
+## 1.1.4 — 2026-10-03
 
 - Fail unsafe explicit APP_CACHE_DIR settings with deployment guidance and migrate implicit legacy caches once into visible durable project storage shared by CLI/PHP-FPM.
 - Refresh mutable metadata/discovery OPcache reads after atomic replacement while retaining immutable build-ID cache behavior.

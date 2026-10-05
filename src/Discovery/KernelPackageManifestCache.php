@@ -43,11 +43,9 @@ final class KernelPackageManifestCache
             return null;
         }
         try {
-            if (!$this->immutable() && function_exists('opcache_invalidate')) {
-                opcache_invalidate($file, true);
-            }
-            $metadata = require $file;
-        } catch (\ParseError) {
+            $contents = file_get_contents($file);
+            $metadata = $contents === false ? null : json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
             return null;
         }
 
@@ -120,17 +118,14 @@ final class KernelPackageManifestCache
         }
 
         sort($packages);
-        $payload = sprintf(
-            "<?php\n\nreturn %s;\n",
-            var_export(
-                [
-                    'fingerprint' => $this->fingerprint(),
-                    'packages'    => array_values(array_unique($packages)),
-                    'metadata' => $metadata,
-                    'inputs' => $inputs,
-                ],
-                true,
-            ),
+        $payload = json_encode(
+            [
+                'fingerprint' => $this->fingerprint(),
+                'packages'    => array_values(array_unique($packages)),
+                'metadata' => $metadata,
+                'inputs' => $inputs,
+            ],
+            JSON_THROW_ON_ERROR,
         );
         $temporaryFile = sprintf('%s.%s.tmp', $file, bin2hex(random_bytes(6)));
 
@@ -140,9 +135,7 @@ final class KernelPackageManifestCache
                 return;
             }
             chmod($temporaryFile, 0600);
-            if (@rename($temporaryFile, $file) && function_exists('opcache_invalidate')) {
-                opcache_invalidate($file, true);
-            }
+            @rename($temporaryFile, $file);
         } finally {
             umask($previousMask);
             if (is_file($temporaryFile)) {
@@ -164,7 +157,7 @@ final class KernelPackageManifestCache
         }
 
         $configured = $_SERVER['APP_CACHE_DIR'] ?? $_ENV['APP_CACHE_DIR'] ?? getenv('APP_CACHE_DIR');
-        return CachePath::resolve($this->projectDir, $environment, is_string($configured) && $configured !== '' ? $configured : null) . '/discovery-packages.php';
+        return CachePath::resolve($this->projectDir, $environment, is_string($configured) && $configured !== '' ? $configured : null) . '/discovery-packages.json';
     }
 
     private function fingerprint(): string
