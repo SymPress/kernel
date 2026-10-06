@@ -6,12 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
-## 1.1.6 — 2026-10-06
+## 1.1.7 — 2026-10-06
 
 - Isolate native compiler-pass state when rebuilding a runtime container after
   newly discovered resources change its identity. Doctrine event listeners and
   other passes now populate the final container instead of retaining definitions
   from the discarded first candidate.
+
+## 1.1.6 — 2026-10-06 (withdrawn)
+
+- An accidental duplicate of the v1.1.5 source, created before a fetch completed.
+  Immutable repository tags retain it for audit. Use v1.1.7 for the compiler fix.
 
 ## 1.1.5 — 2026-10-05
 
