@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.6 — 2026-10-06
+
+- Isolate native compiler-pass state when rebuilding a runtime container after
+  newly discovered resources change its identity. Doctrine event listeners and
+  other passes now populate the final container instead of retaining definitions
+  from the discarded first candidate.
+
 ## 1.1.5 — 2026-10-05
 
 - Store container metadata and discovery descriptors as atomic private JSON, so unchanged readers retain OPcache entries while CLI publications remain visible to existing FPM workers with timestamp validation disabled. Ignore and rebuild legacy PHP metadata without executing it.
