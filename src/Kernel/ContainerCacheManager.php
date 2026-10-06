@@ -15,6 +15,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 
 final readonly class ContainerCacheManager
 {
@@ -289,11 +290,14 @@ final readonly class ContainerCacheManager
         $sourcePasses = $source->getCompilerPassConfig();
         $targetPasses = $target->getCompilerPassConfig();
 
-        $targetPasses->setBeforeOptimizationPasses($sourcePasses->getBeforeOptimizationPasses());
-        $targetPasses->setOptimizationPasses($sourcePasses->getOptimizationPasses());
-        $targetPasses->setBeforeRemovingPasses($sourcePasses->getBeforeRemovingPasses());
-        $targetPasses->setRemovingPasses($sourcePasses->getRemovingPasses());
-        $targetPasses->setAfterRemovingPasses($sourcePasses->getAfterRemovingPasses());
+        // Native passes can retain Definition objects from their last compilation.
+        // Each candidate runtime must start from the pristine builder prototypes.
+        $copy = static fn (CompilerPassInterface $pass): CompilerPassInterface => clone $pass;
+        $targetPasses->setBeforeOptimizationPasses(array_map($copy, $sourcePasses->getBeforeOptimizationPasses()));
+        $targetPasses->setOptimizationPasses(array_map($copy, $sourcePasses->getOptimizationPasses()));
+        $targetPasses->setBeforeRemovingPasses(array_map($copy, $sourcePasses->getBeforeRemovingPasses()));
+        $targetPasses->setRemovingPasses(array_map($copy, $sourcePasses->getRemovingPasses()));
+        $targetPasses->setAfterRemovingPasses(array_map($copy, $sourcePasses->getAfterRemovingPasses()));
     }
 
     /** @param array<string, mixed> $metadata */
