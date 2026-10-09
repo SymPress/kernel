@@ -13,6 +13,8 @@ the original Symfony component behavior.
 
 ## Contents
 
+- [Native compile-time environment diagnostics](compile-time-environment.md)
+
 - `boot-and-bundles.md`
 - `services-and-autowiring.md`
 - `dependency-injection.md`
