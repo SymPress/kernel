@@ -5,7 +5,7 @@ It boots exactly one global site-level container, discovers active MU plugins,
 plugins, and themes as bundles, and imports their `Resources/config/`
 directories into that same container.
 
-The current kernel targets Symfony DependencyInjection `^8.1`. It keeps the
+The current kernel targets Symfony DependencyInjection `^8.1.8`. It keeps the
 WordPress-specific pieces small: package discovery, runtime hydration, hook
 registration, and WP-CLI bridging. Bundle lifecycle, configurable extensions,
 service locators, tagged iterators, resettable services, and most attributes use

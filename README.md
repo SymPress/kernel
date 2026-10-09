@@ -39,7 +39,7 @@ Then it adds the Symfony patterns that pay off in larger codebases:
 - PHP `^8.5`
 - Composer
 - WordPress
-- Symfony DependencyInjection `^8.1`, Config, Console, Filesystem, Routing,
+- Symfony DependencyInjection `^8.1.8`, Config, Console, Filesystem, Routing,
   Service Contracts, EventDispatcher, Clock, ExpressionLanguage, and Yaml
   components
 

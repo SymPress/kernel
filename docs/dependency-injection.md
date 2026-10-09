@@ -16,12 +16,12 @@ build, configure, dump, and run the container:
     "symfony/config": "^8.0",
     "symfony/console": "^8.0",
     "symfony/clock": "^8.0",
-    "symfony/dependency-injection": "^8.1",
+    "symfony/dependency-injection": "^8.1.8",
     "symfony/event-dispatcher": "^8.0",
     "symfony/expression-language": "^8.0",
     "symfony/filesystem": "^8.0",
     "symfony/service-contracts": "^3.6",
-    "symfony/yaml": "^8.0"
+    "symfony/yaml": "^8.1"
   }
 }
 ```

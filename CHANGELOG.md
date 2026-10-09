@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.8 — 2026-10-09
+
+- Require maintained Symfony Routing and YAML 8.1 or newer, excluding the vulnerable 8.0 releases covered by the May 2026 advisories.
+- Require Symfony DependencyInjection 8.1.8 or newer so environment placeholders reused after an earlier extension discards them remain resolvable in compiled containers.
+- Verify environment resolution through container creation and cached-container reload with two extensions sharing an overridden environment value.
+
 ## 1.1.7 — 2026-10-06
 
 - Isolate native compiler-pass state when rebuilding a runtime container after
