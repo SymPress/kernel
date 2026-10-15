@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## Unreleased
+
+- Require Symfony ExpressionLanguage 8.1.9 or newer to exclude releases affected by CVE-2026-109449.
+
 ## 1.1.8 — 2026-10-09
 
 - Require maintained Symfony Routing and YAML 8.1 or newer, excluding the vulnerable 8.0 releases covered by the May 2026 advisories.

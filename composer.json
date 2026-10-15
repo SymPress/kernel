@@ -22,7 +22,7 @@
         "symfony/clock": "^8.0",
         "symfony/dependency-injection": "^8.1.8",
         "symfony/event-dispatcher": "^8.0",
-        "symfony/expression-language": "^8.0",
+        "symfony/expression-language": "^8.1.9",
         "symfony/filesystem": "^8.0",
         "symfony/http-foundation": "^8.1",
         "symfony/http-kernel": "^8.1",

@@ -18,7 +18,7 @@ build, configure, dump, and run the container:
     "symfony/clock": "^8.0",
     "symfony/dependency-injection": "^8.1.8",
     "symfony/event-dispatcher": "^8.0",
-    "symfony/expression-language": "^8.0",
+    "symfony/expression-language": "^8.1.9",
     "symfony/filesystem": "^8.0",
     "symfony/service-contracts": "^3.6",
     "symfony/yaml": "^8.1"
