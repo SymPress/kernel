@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.10 — 2026-10-16
+
+- Require Symfony YAML 8.1.6 or newer to exclude the inline lexer recursion issue CVE-2026-109413.
+- Require Symfony HttpFoundation 8.1.9 or newer for the CVE-2026-108082 header parser fix and its whitespace-separator correction.
+- Verify dependency version boundaries, bounded expression and YAML parsing, and header splitting without changing trusted configuration inputs.
+
 ## 1.1.9 — 2026-10-15
 
 - Require Symfony ExpressionLanguage 8.1.9 or newer to exclude releases affected by CVE-2026-109449.

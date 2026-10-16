@@ -24,13 +24,14 @@
         "symfony/event-dispatcher": "^8.0",
         "symfony/expression-language": "^8.1.9",
         "symfony/filesystem": "^8.0",
-        "symfony/http-foundation": "^8.1",
+        "symfony/http-foundation": "^8.1.9",
         "symfony/http-kernel": "^8.1",
         "symfony/routing": "^8.1",
         "symfony/service-contracts": "^3.6",
-        "symfony/yaml": "^8.1"
+        "symfony/yaml": "^8.1.6"
     },
     "require-dev": {
+        "composer/semver": "^3.4",
         "sympress/qa": "^0.1.2"
     },
     "autoload": {
