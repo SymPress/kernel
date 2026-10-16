@@ -21,7 +21,7 @@ build, configure, dump, and run the container:
     "symfony/expression-language": "^8.1.9",
     "symfony/filesystem": "^8.0",
     "symfony/service-contracts": "^3.6",
-    "symfony/yaml": "^8.1"
+    "symfony/yaml": "^8.1.6"
   }
 }
 ```
