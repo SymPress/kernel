@@ -1048,6 +1048,11 @@ config, and discovery freshness scans and requires a nonempty
 immutable and **every** code/config/Composer change changes that identity. A build
 ID alone does not disable normal config validation. Missing identity is an error;
 this optimization must never silently hide edits in a mutable installation.
+Mutable warm hits otherwise cost one `stat()` per bundle `composer.json` and per
+consumed config file plus one directory listing per existing config directory
+(about six to eight filesystem calls per bundle), so immutable release
+deployments should enable the policy. Runtime's `kernel-cache --generate-build-id`
+produces a matching identity.
 
 Bundle extensions are pristine prototypes cloned for each builder. Runtime
 compilation copies the mutable definition/argument graph so console lint/debug

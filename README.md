@@ -201,7 +201,11 @@ hit. Imported configuration resources are still validated so service wiring
 changes invalidate the runtime container. Deployment rollovers can use
 `SYMPRESS_KERNEL_BUILD_ID` to force a new cache identity, and
 `SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES=1` opts back into source-level
-freshness checks when the request-time filesystem cost is acceptable.
+freshness checks when the request-time filesystem cost is acceptable. Immutable
+release snapshots should set `SYMPRESS_KERNEL_IMMUTABLE_CACHE=1` together with a
+build ID: that skips the per-request config and discovery directory scans (about
+six to eight filesystem calls per bundle) and makes the build ID the only cache
+boundary.
 
 Bundle discovery also stores the matching Composer package manifest under the
 kernel cache directory. The manifest is invalidated when Composer metadata such
