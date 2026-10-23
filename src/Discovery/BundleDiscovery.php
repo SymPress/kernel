@@ -126,7 +126,7 @@ final class BundleDiscovery
 
         $composerFile = sprintf('%s/composer.json', $installPath);
 
-        if (!is_file($composerFile)) {
+        if (!$this->knownComposerFile($composerFile)) {
             return null;
         }
 
@@ -457,7 +457,7 @@ final class BundleDiscovery
 
             $composerFile = sprintf('%s/composer.json', $installPath);
 
-            if (!is_file($composerFile)) {
+            if (!$this->knownComposerFile($composerFile)) {
                 return false;
             }
 
@@ -501,6 +501,15 @@ final class BundleDiscovery
                 static fn (mixed $package): bool => is_string($package) && $package !== '',
             ),
         );
+    }
+
+    /**
+     * Metadata restored from the manifest cache was validated against the file's
+     * fingerprint already; only unknown files need a filesystem probe.
+     */
+    private function knownComposerFile(string $composerFile): bool
+    {
+        return isset($this->metadata[$composerFile]) || is_file($composerFile);
     }
 
     /** @return array<string, mixed> */
