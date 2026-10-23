@@ -14,7 +14,7 @@ final class PackageManagerPage
     private const string ACTION_QUERY_VAR = 'kernel-package-action';
     private const string PACKAGE_QUERY_VAR = 'kernel-package';
     private const string NOTICE_QUERY_VAR = 'kernel-package-notice';
-    private const string MESSAGE_QUERY_VAR = 'kernel-package-message';
+    private const string NOTICE_TRANSIENT_PREFIX = 'kernel_package_notice_';
     private const string VIEW_QUERY_VAR = 'package_status';
     private const string BULK_NONCE_ACTION = 'bulk-packages';
 
@@ -186,7 +186,7 @@ final class PackageManagerPage
         $packages = $this->packages->all();
         $currentView = $this->currentView();
         $notice = $this->requestString(self::NOTICE_QUERY_VAR);
-        $message = $this->noticeMessage($notice, $this->requestString(self::MESSAGE_QUERY_VAR));
+        $message = $notice === '' ? '' : $this->noticeMessage($notice, $this->takeNoticeMessage());
 
         $this->view($currentView, $notice, $message)->render(
             $packages,
@@ -400,21 +400,47 @@ SVG;
 
     private function redirect(string $notice, string $message = ''): never
     {
+        // Free text never travels through the URL: a crafted link could otherwise
+        // show an administrator an arbitrary notice.
+        $this->stashNoticeMessage($message);
         wp_safe_redirect(
             $this->pageUrl(
-                array_filter(
-                    array_merge(
-                        $this->currentViewArgs(),
-                        [
-                            self::NOTICE_QUERY_VAR  => $notice,
-                            self::MESSAGE_QUERY_VAR => $message,
-                        ],
-                    ),
-                    static fn (string $value): bool => $value !== '',
-                ),
+                array_merge($this->currentViewArgs(), [self::NOTICE_QUERY_VAR => $notice]),
             ),
         );
         exit;
+    }
+
+    private function stashNoticeMessage(string $message): void
+    {
+        if ($message === '' || !function_exists('set_transient')) {
+            return;
+        }
+
+        set_transient($this->noticeTransientKey(), $message, 60);
+    }
+
+    private function takeNoticeMessage(): string
+    {
+        if (!function_exists('get_transient')) {
+            return '';
+        }
+
+        $key = $this->noticeTransientKey();
+        $message = get_transient($key);
+
+        if ($message !== false) {
+            delete_transient($key);
+        }
+
+        return is_string($message) ? $message : '';
+    }
+
+    private function noticeTransientKey(): string
+    {
+        $user = function_exists('get_current_user_id') ? get_current_user_id() : 0;
+
+        return self::NOTICE_TRANSIENT_PREFIX . $user;
     }
 
     private function isPostRequest(): bool
