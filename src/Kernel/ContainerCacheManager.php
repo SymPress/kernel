@@ -19,6 +19,8 @@ use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 
 final readonly class ContainerCacheManager
 {
+    private const string SOURCES_FILE = 'sources.json';
+
     public function __construct(
         private string $cacheDir,
         private bool $debug,
@@ -165,6 +167,11 @@ final readonly class ContainerCacheManager
             try {
                 $filesystem->dumpFile($containerFile, $dump);
                 chmod($containerFile, 0600);
+                // The per-file source manifest is only read when source validation is
+                // enabled, so keep it out of the metadata parsed on every request.
+                $sourcesFile = sprintf('%s/%s', $this->cacheDir, self::SOURCES_FILE);
+                $filesystem->dumpFile($sourcesFile, json_encode(['source_resources' => $sourceResources], JSON_THROW_ON_ERROR));
+                chmod($sourcesFile, 0600);
                 $filesystem->dumpFile(
                     $metaFile,
                     json_encode(
@@ -174,7 +181,7 @@ final readonly class ContainerCacheManager
                             'config_discovery' => $this->fingerprints->discoveryResourceManifest($configDirectories),
                             'config_resources'   => $configResources,
                             'source_fingerprint' => $sourceFingerprint,
-                            'source_resources'   => $sourceResources,
+                            'sources'            => self::SOURCES_FILE,
                             'class'              => $class,
                             'file'               => basename($containerFile),
                         ],
@@ -200,6 +207,24 @@ final readonly class ContainerCacheManager
             flock($lock, LOCK_UN);
             fclose($lock);
         }
+    }
+
+    /**
+     * Older metadata embedded the manifest; current metadata names the sidecar file.
+     *
+     * @param array<string, mixed> $metadata
+     */
+    private function sourceResources(array $metadata): mixed
+    {
+        if (array_key_exists('source_resources', $metadata)) {
+            return $metadata['source_resources'];
+        }
+        if (($metadata['sources'] ?? null) !== self::SOURCES_FILE) {
+            return null;
+        }
+        $sources = $this->readMetadata(sprintf('%s/%s', $this->cacheDir, self::SOURCES_FILE));
+
+        return $sources['source_resources'] ?? null;
     }
 
     /** @return array<mixed, mixed>|null */
@@ -333,7 +358,7 @@ final readonly class ContainerCacheManager
 
         if (
             $this->fingerprints->shouldValidateCachedSourceResources()
-            && !$this->fingerprints->sourceResourcesAreFresh($metadata['source_resources'] ?? null)
+            && !$this->fingerprints->sourceResourcesAreFresh($this->sourceResources($metadata))
         ) {
             return false;
         }

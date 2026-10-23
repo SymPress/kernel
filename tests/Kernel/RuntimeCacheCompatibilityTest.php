@@ -135,6 +135,14 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $container = $kernel->createContainer();
         $loaded = $kernel->configureContainer($container->builder(), $container, $registry);
         $kernel->createRuntimeContainer($container, $registry, $loaded);
+        $cacheDir = "{$projectDir}/var/cache/test/kernel";
+        $metadata = json_decode((string) file_get_contents("{$cacheDir}/meta.json"), true, flags: JSON_THROW_ON_ERROR);
+        // The per-file manifest stays out of the metadata parsed on every request.
+        self::assertArrayNotHasKey('source_resources', $metadata);
+        self::assertSame('sources.json', $metadata['sources']);
+        $sources = json_decode((string) file_get_contents("{$cacheDir}/sources.json"), true, flags: JSON_THROW_ON_ERROR);
+        self::assertArrayHasKey($sourceFile, $sources['source_resources']);
+        self::assertTrue($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
 
         file_put_contents($sourceFile, '<?php final class DemoService { public function touch(): void {} }');
         touch($sourceFile, time() + 5);
@@ -143,6 +151,34 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $staleKernel = $this->kernel($projectDir);
         $staleContainer = $staleKernel->createContainer();
         self::assertFalse($staleKernel->tryUseRuntimeContainer($staleContainer, $registry));
+    }
+
+    public function testRuntimeCacheStillReadsMetadataWithEmbeddedSourceResources(): void
+    {
+        $_SERVER['SYMPRESS_KERNEL_VALIDATE_SOURCE_RESOURCES'] = '1';
+        $projectDir = $this->tmpPath('runtime-embedded-sources-project');
+        $bundleDir = $this->tmpPath('runtime-embedded-sources-bundle');
+        mkdir("{$bundleDir}/src", 0777, true);
+        file_put_contents("{$bundleDir}/composer.json", '{}');
+        file_put_contents("{$bundleDir}/src/DemoService.php", '<?php final class DemoService {}');
+        $registry = $this->registry($bundleDir);
+        $kernel = $this->kernel($projectDir);
+        $container = $kernel->createContainer();
+        $kernel->createRuntimeContainer($container, $registry, $kernel->configureContainer($container->builder(), $container, $registry));
+        $cacheDir = "{$projectDir}/var/cache/test/kernel";
+        $metadata = json_decode((string) file_get_contents("{$cacheDir}/meta.json"), true, flags: JSON_THROW_ON_ERROR);
+        $sources = json_decode((string) file_get_contents("{$cacheDir}/sources.json"), true, flags: JSON_THROW_ON_ERROR);
+        unset($metadata['sources']);
+        $metadata['source_resources'] = $sources['source_resources'];
+        file_put_contents("{$cacheDir}/meta.json", json_encode($metadata, JSON_THROW_ON_ERROR));
+        unlink("{$cacheDir}/sources.json");
+
+        self::assertTrue($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
+
+        unset($metadata['source_resources']);
+        file_put_contents("{$cacheDir}/meta.json", json_encode($metadata, JSON_THROW_ON_ERROR));
+
+        self::assertFalse($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
     }
 
     public function testRuntimeCacheInvalidatesWhenImportedConfigFileChanges(): void
