@@ -10,6 +10,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Exception\MethodNotAllowedException;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
+use Symfony\Component\Routing\Matcher\CompiledUrlMatcher;
+use Symfony\Component\Routing\Matcher\Dumper\CompiledUrlMatcherDumper;
 use Symfony\Component\Routing\Matcher\UrlMatcher;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\Route;
@@ -64,12 +66,37 @@ final class RouteLoader
     /**
      * @param list<CompiledRoute> $routes
      * @param list<CompiledRestRoute> $restRoutes
+     * @param list<mixed> $compiledRoutes Matcher tables from compileRoutes(); empty falls back to UrlMatcher.
      */
     public function __construct(
         private readonly ContainerInterface $controllers,
         private array $routes = [],
         private array $restRoutes = [],
+        private readonly array $compiledRoutes = [],
     ) {
+    }
+
+    /**
+     * Precompute the matcher tables at container compile time so requests do not
+     * run one regular expression per route. Routes with a condition compile to a
+     * closure that cannot be dumped, so they keep the runtime UrlMatcher.
+     *
+     * @param list<CompiledRoute> $routes
+     * @return list<mixed>
+     */
+    public static function compileRoutes(array $routes): array
+    {
+        if ($routes === []) {
+            return [];
+        }
+
+        foreach ($routes as $route) {
+            if ($route['condition'] !== '') {
+                return [];
+            }
+        }
+
+        return array_values((new CompiledUrlMatcherDumper(self::collection($routes)))->getCompiledRoutes());
     }
 
     private ?RouteCollection $routeCollection = null;
@@ -92,10 +119,10 @@ final class RouteLoader
             return null;
         }
 
-        $matcher = new UrlMatcher(
-            $this->routeCollection(),
-            (new RequestContext())->fromRequest($request),
-        );
+        $context = (new RequestContext())->fromRequest($request);
+        $matcher = $this->compiledRoutes === []
+            ? new UrlMatcher($this->routeCollection(), $context)
+            : new CompiledUrlMatcher($this->compiledRoutes, $context);
 
         try {
             $attributes = $this->stringKeyMap($matcher->matchRequest($request));
@@ -153,17 +180,23 @@ final class RouteLoader
             return $this->routeCollection;
         }
 
+        $this->routeCollection = self::collection($this->routes);
+
+        return $this->routeCollection;
+    }
+
+    /** @param list<CompiledRoute> $routes */
+    private static function collection(array $routes): RouteCollection
+    {
         $collection = new RouteCollection();
 
-        foreach ($this->routes as $definition) {
+        foreach ($routes as $definition) {
             $collection->add(
                 $definition['name'],
-                $this->symfonyRoute($definition),
+                self::symfonyRoute($definition),
                 (int) ($definition['priority'] ?? 0),
             );
         }
-
-        $this->routeCollection = $collection;
 
         return $collection;
     }
@@ -373,7 +406,7 @@ final class RouteLoader
     }
 
     /** @param CompiledRoute|CompiledRestRoute $definition */
-    private function symfonyRoute(array $definition): Route
+    private static function symfonyRoute(array $definition): Route
     {
         return new Route(
             $definition['path'],
@@ -396,7 +429,7 @@ final class RouteLoader
             return str_starts_with($explicitPath, '/') ? $explicitPath : '/' . $explicitPath;
         }
 
-        $regex = $this->symfonyRoute($route)->compile()->getRegex();
+        $regex = self::symfonyRoute($route)->compile()->getRegex();
         $delimiter = $regex[0] ?? '';
         $closingDelimiter = match ($delimiter) {
             '{' => '}',

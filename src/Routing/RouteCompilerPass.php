@@ -61,6 +61,7 @@ final class RouteCompilerPass implements CompilerPassInterface
         $definition->setArgument(0, ServiceLocatorTagPass::register($container, $serviceMap));
         $definition->setArgument(1, $frontendRoutes);
         $definition->setArgument(2, $restRoutes);
+        $definition->setArgument(3, RouteLoader::compileRoutes($frontendRoutes));
     }
 
     /**
