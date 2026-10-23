@@ -186,7 +186,7 @@ final class PackageManagerPage
         $packages = $this->packages->all();
         $currentView = $this->currentView();
         $notice = $this->requestString(self::NOTICE_QUERY_VAR);
-        $message = $this->noticeMessage($notice, $this->takeNoticeMessage());
+        $message = $notice === '' ? '' : $this->noticeMessage($notice, $this->takeNoticeMessage());
 
         $this->view($currentView, $notice, $message)->render(
             $packages,
