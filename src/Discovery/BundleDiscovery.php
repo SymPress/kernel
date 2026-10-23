@@ -42,12 +42,16 @@ final class BundleDiscovery
     /** @var array<string, string> */
     private array $metadataHashes = [];
 
-    /** @param list<string>|array<string> $packagePrefixes Optional package-name prefixes used to narrow discovery. */
+    /**
+     * @param list<string>|array<string> $packagePrefixes Optional package-name prefixes used to narrow discovery.
+     * @param string|null $cacheDir Resolved kernel cache directory; resolved again from the project when omitted.
+     */
     public function __construct(
         private readonly ActivePackageResolver $resolver,
         array $packagePrefixes = [],
         private readonly ?string $projectDir = null,
         private readonly ?string $environment = null,
+        private readonly ?string $cacheDir = null,
     ) {
 
         $this->packagePrefixes = $this->normalizePackagePrefixes($packagePrefixes);
@@ -548,7 +552,7 @@ final class BundleDiscovery
             return $this->packageNames;
         }
 
-        $cache = new KernelPackageManifestCache($this->projectDir, $this->environment, $this->packagePrefixes);
+        $cache = new KernelPackageManifestCache($this->projectDir, $this->environment, $this->packagePrefixes, $this->cacheDir);
         $cachedPackages = $cache->read();
 
         if ($cachedPackages !== null) {
