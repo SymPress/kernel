@@ -525,7 +525,7 @@ final class CoreServiceRegistrar
             RouteLoader::class,
             (new Definition(RouteLoader::class))
                 ->setPublic(true)
-                ->setArguments([null, [], []])
+                ->setArguments([null, [], [], []])
                 ->addTag(
                     HookLoader::TAG,
                     [

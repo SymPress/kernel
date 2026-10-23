@@ -65,6 +65,9 @@ namespace SymPress\Kernel\Tests\Routing {
 
             self::assertInstanceOf(RouteLoader::class, $loader);
 
+            // The compiled matcher tables are dumped into the container; requests do not rebuild them.
+            self::assertNotSame([], (new \ReflectionProperty($loader, 'compiledRoutes'))->getValue($loader));
+
             $response = $loader->handle(Request::create('/kernel/hello/codex', 'GET'));
 
             self::assertNotNull($response);
@@ -76,6 +79,34 @@ namespace SymPress\Kernel\Tests\Routing {
             self::assertNotNull($methodMismatch);
             self::assertSame(405, $methodMismatch->getStatusCode());
             self::assertSame('GET', $methodMismatch->headers->get('Allow'));
+        }
+
+        public function testRoutesWithConditionsKeepTheRuntimeMatcher(): void
+        {
+            $route = [
+                'name' => 'conditional',
+            'path' => '/conditional',
+            'methods' => ['GET'],
+            'schemes' => [],
+            'host' => '',
+                'defaults' => ['_controller_service' => 'demo', '_controller_class' => 'Demo', '_controller_method' => 'run'],
+                'requirements' => [],
+            'options' => [],
+            'condition' => "request.headers.get('X-Demo') == 'yes'",
+            'priority' => 0,
+                'service' => 'demo',
+            'class' => 'Demo',
+            'method' => 'run',
+            ];
+
+            self::assertSame([], RouteLoader::compileRoutes([$route]));
+            self::assertSame([], RouteLoader::compileRoutes([]));
+
+            $route['condition'] = '';
+            $compiled = RouteLoader::compileRoutes([$route]);
+
+            self::assertNotSame([], $compiled);
+            self::assertNull($compiled[4]);
         }
 
         public function testRestRoutesAreRegisteredWithWordPressRestApi(): void
