@@ -226,7 +226,8 @@ final readonly class ContainerCacheManager
             return ['immutable' => 'immutable'];
         }
         $sources = $metadata['sources'] ?? null;
-        if (!is_string($sources) || preg_match(self::SOURCES_PATTERN, $sources) !== 1 || $sources !== 'sources_' . substr((string) $metadata['class'], strlen('KernelContainer_')) . '.json') {
+        $class = $metadata['class'] ?? null;
+        if (!is_string($sources) || !is_string($class) || preg_match(self::SOURCES_PATTERN, $sources) !== 1 || $sources !== 'sources_' . substr($class, strlen('KernelContainer_')) . '.json') {
             return null;
         }
         $manifest = $this->readMetadata(sprintf('%s/%s', $this->cacheDir, $sources));
