@@ -7,18 +7,23 @@ namespace SymPress\Kernel\Kernel;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\SiteConfig;
 
-final readonly class KernelConfigurationResolver
+final class KernelConfigurationResolver
 {
+    /** @var list<string>|null */
+    private ?array $packagePrefixes = null;
+    private ?string $cacheDir = null;
+
     public function __construct(
-        private string $projectDir,
-        private string $environment,
-        private SiteConfig $config,
+        private readonly string $projectDir,
+        private readonly string $environment,
+        private readonly SiteConfig $config,
     ) {
     }
 
     public function cacheDir(): string
     {
-        return CachePath::resolve($this->projectDir, $this->environment, $this->serverString('APP_CACHE_DIR'));
+        // Resolving the path walks realpath() and permission checks; a resolver lives for one boot.
+        return $this->cacheDir ??= CachePath::resolve($this->projectDir, $this->environment, $this->serverString('APP_CACHE_DIR'));
     }
 
     public function buildDir(): string
@@ -65,13 +70,20 @@ final readonly class KernelConfigurationResolver
     /** @return list<string> */
     public function packagePrefixes(): array
     {
+        if ($this->packagePrefixes !== null) {
+            return $this->packagePrefixes;
+        }
+
         $configured = $this->config->get('KERNEL_PACKAGE_PREFIXES', null);
 
         if ($configured === null) {
+            // The root composer.json is parsed once per resolver, not once per request phase.
             $configured = $this->composerKernelPackagePrefixes();
         }
 
-        return $this->normalizePackagePrefixes($configured);
+        $this->packagePrefixes = $this->normalizePackagePrefixes($configured);
+
+        return $this->packagePrefixes;
     }
 
     /** @return list<string> */

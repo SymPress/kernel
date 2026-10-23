@@ -13,6 +13,7 @@ final class KernelPackageManifestCache
 {
     /** @var array<string, array<string, mixed>> */
     private array $metadata = [];
+    private ?ContainerResourceFingerprinter $fingerprints = null;
 
     /** @return array<string, array<string, mixed>> */
     public function metadata(): array
@@ -22,11 +23,13 @@ final class KernelPackageManifestCache
 
     /**
      * @param list<string> $packagePrefixes
+     * @param string|null $cacheDir Resolved kernel cache directory; resolved from the project when omitted.
      */
     public function __construct(
         private readonly ?string $projectDir,
         private readonly ?string $environment,
         private readonly array $packagePrefixes,
+        private readonly ?string $cacheDir = null,
     ) {
     }
 
@@ -150,6 +153,10 @@ final class KernelPackageManifestCache
             return null;
         }
 
+        if ($this->cacheDir !== null && $this->cacheDir !== '') {
+            return rtrim($this->cacheDir, '/') . '/discovery-packages.json';
+        }
+
         $environment = $this->environment;
 
         if ($environment === null || $environment === '') {
@@ -187,7 +194,9 @@ final class KernelPackageManifestCache
 
     private function immutable(): bool
     {
-        return (new ContainerResourceFingerprinter((string) $this->projectDir, (string) $this->environment, false))->immutable();
+        $this->fingerprints ??= new ContainerResourceFingerprinter((string) $this->projectDir, (string) $this->environment, false);
+
+        return $this->fingerprints->immutable();
     }
 
     private function rootComposerFile(): string

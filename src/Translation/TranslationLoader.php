@@ -115,7 +115,8 @@ final class TranslationLoader
         $previous = libxml_use_internal_errors(true);
 
         try {
-            if (!$document->load($file)) {
+            // Bundle XLIFF never needs external entities or network fetches.
+            if (!$document->load($file, LIBXML_NONET)) {
                 throw new \RuntimeException(sprintf('Unable to load XLIFF file "%s".', $file));
             }
         } finally {

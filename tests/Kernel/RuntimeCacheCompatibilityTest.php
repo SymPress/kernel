@@ -135,6 +135,14 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $container = $kernel->createContainer();
         $loaded = $kernel->configureContainer($container->builder(), $container, $registry);
         $kernel->createRuntimeContainer($container, $registry, $loaded);
+        $cacheDir = "{$projectDir}/var/cache/test/kernel";
+        $metadata = json_decode((string) file_get_contents("{$cacheDir}/meta.json"), true, flags: JSON_THROW_ON_ERROR);
+        // The per-file manifest stays out of the metadata parsed on every request.
+        self::assertArrayNotHasKey('source_resources', $metadata);
+        self::assertSame('sources_' . substr($metadata['class'], strlen('KernelContainer_')) . '.json', $metadata['sources']);
+        $sources = json_decode((string) file_get_contents("{$cacheDir}/{$metadata['sources']}"), true, flags: JSON_THROW_ON_ERROR);
+        self::assertArrayHasKey($sourceFile, $sources['source_resources']);
+        self::assertTrue($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
 
         file_put_contents($sourceFile, '<?php final class DemoService { public function touch(): void {} }');
         touch($sourceFile, time() + 5);
@@ -406,12 +414,13 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $previous = getenv('APP_CACHE_DIR');
         putenv('APP_CACHE_DIR=' . $project . '/external');
         try {
-            $resolver = new KernelConfigurationResolver($project, 'test', new TestSiteConfig('test'));
-            self::assertSame($project . '/external/test/kernel', $resolver->cacheDir());
+            // A resolver fixes its cache path for one boot; each precedence step uses a fresh one.
+            $resolver = static fn (): KernelConfigurationResolver => new KernelConfigurationResolver($project, 'test', new TestSiteConfig('test'));
+            self::assertSame($project . '/external/test/kernel', $resolver()->cacheDir());
             $_ENV['APP_CACHE_DIR'] = $project . '/env';
-            self::assertSame($project . '/env/test/kernel', $resolver->cacheDir());
+            self::assertSame($project . '/env/test/kernel', $resolver()->cacheDir());
             $_SERVER['APP_CACHE_DIR'] = $project . '/server';
-            self::assertSame($project . '/server/test/kernel', $resolver->cacheDir());
+            self::assertSame($project . '/server/test/kernel', $resolver()->cacheDir());
         } finally {
             unset($_SERVER['APP_CACHE_DIR'], $_ENV['APP_CACHE_DIR']);
             putenv($previous === false ? 'APP_CACHE_DIR' : 'APP_CACHE_DIR=' . $previous);

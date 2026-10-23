@@ -31,6 +31,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
+// phpcs:ignore SymPress.Classes.PropertyLimit.TooManyProperties -- The resolver is kept for one boot so the cache path is resolved once per request.
 abstract class AbstractKernel implements KernelInterface
 {
     protected readonly SiteConfig $config;
@@ -44,6 +45,7 @@ abstract class AbstractKernel implements KernelInterface
     protected array $bundles = [];
 
     private ?CoreServiceRegistrar $coreServiceRegistrar = null;
+    private ?KernelConfigurationResolver $configuration = null;
 
     public function __construct(
         protected readonly string $projectDir,
@@ -76,6 +78,7 @@ abstract class AbstractKernel implements KernelInterface
         $this->bundleRegistry = null;
         $this->bundles = [];
         $this->coreServiceRegistrar = null;
+        $this->configuration = null;
     }
 
     /** @return array{project_dir: string, environment: string, debug: bool} */
@@ -265,6 +268,7 @@ abstract class AbstractKernel implements KernelInterface
             $this->configuration()->packagePrefixes(),
             $this->projectDir,
             $this->environment,
+            $this->getCacheDir(),
         ))->discover();
         $this->bundles = $this->bundleMap($this->bundleRegistry);
 
@@ -373,7 +377,7 @@ abstract class AbstractKernel implements KernelInterface
 
     private function configuration(): KernelConfigurationResolver
     {
-        return new KernelConfigurationResolver(
+        return $this->configuration ??= new KernelConfigurationResolver(
             $this->projectDir,
             $this->environment,
             $this->config,
@@ -433,6 +437,7 @@ abstract class AbstractKernel implements KernelInterface
         $this->container = null;
         $this->bundleRegistry = null;
         $this->bundles = [];
+        $this->configuration = null;
     }
 
     /** @return array<string, BundleInterface> */
