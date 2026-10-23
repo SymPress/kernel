@@ -19,8 +19,8 @@ final class ResourceFingerprint
     public static function file(string $file): string
     {
         clearstatcache(true, $file);
-        $stat = @stat($file);
-        if ($stat === false || !is_file($file)) {
+        $stat = is_file($file) ? @stat($file) : false;
+        if ($stat === false) {
             return 'missing';
         }
         if (!self::contentHashes()) {
