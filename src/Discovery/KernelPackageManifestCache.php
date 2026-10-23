@@ -13,6 +13,7 @@ final class KernelPackageManifestCache
 {
     /** @var array<string, array<string, mixed>> */
     private array $metadata = [];
+    private ?ContainerResourceFingerprinter $fingerprints = null;
 
     /** @return array<string, array<string, mixed>> */
     public function metadata(): array
@@ -187,7 +188,9 @@ final class KernelPackageManifestCache
 
     private function immutable(): bool
     {
-        return (new ContainerResourceFingerprinter((string) $this->projectDir, (string) $this->environment, false))->immutable();
+        $this->fingerprints ??= new ContainerResourceFingerprinter((string) $this->projectDir, (string) $this->environment, false);
+
+        return $this->fingerprints->immutable();
     }
 
     private function rootComposerFile(): string
