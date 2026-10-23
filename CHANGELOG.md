@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.11 — 2026-10-23
+
+- Check for a regular file before reading resource metadata, so a missing resource such as `symfony_register_bundles` no longer leaves a suppressed `stat()` warning in PHP's `error_get_last()`. WordPress no longer adds the `php-error` admin body class and shifts the sidebar by 2em. Fingerprint formats are unchanged.
+
 ## 1.1.10 — 2026-10-16
 
 - Require Symfony YAML 8.1.6 or newer to exclude the inline lexer recursion issue CVE-2026-109413.
