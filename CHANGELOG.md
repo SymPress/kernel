@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.12 — 2026-10-24
+
+- Keep the per-file source manifest of each container generation in `sources_<key>.json` next to `meta.json`, so warm requests no longer parse one entry per kernel and bundle source file. Older metadata that still embeds `source_resources` stays readable; the immutable policy never reads the sidecar.
+- Read the immutable cache policy once per fingerprinter and document the per-request cost of mutable warm hits: immutable release snapshots should set `SYMPRESS_KERNEL_IMMUTABLE_CACHE=1` together with a build ID.
+- Resolve the kernel configuration and cache path once per boot and pass the resolved cache directory to bundle discovery. `BundleDiscovery` and `KernelPackageManifestCache` accept it as an optional trailing constructor argument.
+- Skip the `composer.json` probe for packages restored from the discovery manifest; the manifest fingerprints already validated those files.
+- Dispatch frontend routes through matcher tables compiled with the container instead of one regular expression per route on every request. Routes with a `condition` keep the runtime matcher. `RouteLoader` gains an optional fourth constructor argument.
+- Carry package-manager notices in a short-lived per-user transient instead of the `kernel-package-message` query argument, so a crafted link cannot place arbitrary text in an admin notice.
+- Load bundle XLIFF files with `LIBXML_NONET`.
+- Document that `WpContext` flags are request-derived and never an authorization check.
+
 ## 1.1.11 — 2026-10-23
 
 - Check for a regular file before reading resource metadata, so a missing resource such as `symfony_register_bundles` no longer leaves a suppressed `stat()` warning in PHP's `error_get_last()`. WordPress no longer adds the `php-error` admin body class and shifts the sidebar by 2em. Fingerprint formats are unchanged.
