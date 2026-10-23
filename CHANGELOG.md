@@ -73,6 +73,8 @@ where applicable.
 
 ### Added
 
+- Qualify native Symfony 8.2 service shutdown in the WordPress App lifecycle, with final cleanup, error continuation and shutdown-aware autoconfiguration.
+
 - Bridge `App::enableDebug()` and `App::disableDebug()` to an optional profiler service.
 
 ### Changed

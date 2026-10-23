@@ -234,6 +234,10 @@ final class CoreServiceRegistrar
             PassConfig::TYPE_BEFORE_OPTIMIZATION,
             200,
         );
+        if (NativeServiceShutdown::supports(ServicesResetter::class)) {
+            $builder->addCompilerPass(new ShutdownServicePass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -31);
+        }
+
         $builder->addCompilerPass(new ResettableServicePass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -32);
     }
 

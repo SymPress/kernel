@@ -6,7 +6,10 @@ namespace SymPress\Kernel;
 
 use SymPress\Kernel\Hook\HookLoader;
 use SymPress\Kernel\Kernel\KernelInterface;
+use SymPress\Kernel\Kernel\NativeServiceShutdown;
 use SymPress\Kernel\Kernel\SiteKernel;
+use Symfony\Component\DependencyInjection\ServicesResetter;
+use WeakReference;
 
 final class App
 {
@@ -26,6 +29,7 @@ final class App
     private ?Container $container = null;
     private bool $booted = false;
     private bool $booting = false;
+    private bool $nativeShutdownPending = false;
     private ?bool $debugEnabled = null;
 
     private function __construct(
@@ -159,9 +163,11 @@ final class App
             $this->kernel->boot($container, $bundles);
             $this->booted = true;
             $this->booting = false;
+            $this->registerShutdown();
             self::dispatchAction(self::ACTION_BOOTED, $container, $bundles);
             self::dispatchAction(self::LEGACY_ACTION_CONTAINER_LOADED, $container);
         } catch (\Throwable $throwable) {
+            $this->rollbackNativeBoot();
             $this->booted = false;
             $this->booting = false;
             $this->container = null;
@@ -198,6 +204,49 @@ final class App
         }
 
         return $value;
+    }
+
+    private function rollbackNativeBoot(): void
+    {
+        if (!$this->nativeShutdownPending) {
+            return;
+        }
+
+        $this->nativeShutdownPending = false;
+        try {
+            $this->kernel->shutdown();
+        } catch (\Throwable $error) {
+            // Preserve the boot exception; report cleanup failure without service data.
+            error_log('[sympress/kernel] Boot rollback cleanup failed: ' . $error::class);
+        }
+    }
+
+    private function registerShutdown(): void
+    {
+        if (!NativeServiceShutdown::supports(ServicesResetter::class) || !$this->container?->has('services_resetter')) {
+            return;
+        }
+        if (!NativeServiceShutdown::supports($this->container->get('services_resetter'))) {
+            return;
+        }
+
+        $this->nativeShutdownPending = true;
+        $reference = WeakReference::create($this);
+        register_shutdown_function(static function () use ($reference): void {
+            $app = $reference->get();
+            if (!$app instanceof self || !$app->nativeShutdownPending) {
+                return;
+            }
+            $app->nativeShutdownPending = false;
+            try {
+                $app->kernel->shutdown();
+            } catch (\Throwable $error) {
+                self::handleThrowable($error);
+            } finally {
+                $app->booted = false;
+                $app->container = null;
+            }
+        });
     }
 
     private function initializeContainer(): Container
