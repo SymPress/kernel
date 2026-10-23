@@ -42,6 +42,20 @@ final class KernelPackageManifestCacheTest extends TestCase
         self::assertNull($cache->read());
     }
 
+    public function testExplicitCacheDirectorySkipsResolvingTheProjectCachePath(): void
+    {
+        $projectDir = $this->tmpPath('discovery-cache-explicit');
+        file_put_contents("{$projectDir}/composer.json", '{}');
+        $cacheDir = "{$projectDir}/resolved/kernel";
+
+        $cache = new KernelPackageManifestCache($projectDir, 'production', ['sympress/'], $cacheDir);
+        $cache->write(['sympress/kernel']);
+
+        self::assertFileExists("{$cacheDir}/discovery-packages.json");
+        self::assertFileDoesNotExist("{$projectDir}/var/cache/production/kernel/discovery-packages.json");
+        self::assertSame(['sympress/kernel'], $cache->read());
+    }
+
     public function testUnchangedManifestReadersDoNotInvalidateOpcache(): void
     {
         $project = $this->tmpPath('discovery-reader-cost');

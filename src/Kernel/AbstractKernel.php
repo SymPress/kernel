@@ -44,6 +44,8 @@ abstract class AbstractKernel implements KernelInterface
     protected array $bundles = [];
 
     private ?CoreServiceRegistrar $coreServiceRegistrar = null;
+    private ?KernelConfigurationResolver $configuration = null;
+    private ?string $cacheDir = null;
 
     public function __construct(
         protected readonly string $projectDir,
@@ -76,6 +78,8 @@ abstract class AbstractKernel implements KernelInterface
         $this->bundleRegistry = null;
         $this->bundles = [];
         $this->coreServiceRegistrar = null;
+        $this->configuration = null;
+        $this->cacheDir = null;
     }
 
     /** @return array{project_dir: string, environment: string, debug: bool} */
@@ -124,7 +128,8 @@ abstract class AbstractKernel implements KernelInterface
 
     public function getCacheDir(): string
     {
-        return $this->configuration()->cacheDir();
+        // Resolving the cache path walks realpath() and permission checks; do it once per boot.
+        return $this->cacheDir ??= $this->configuration()->cacheDir();
     }
 
     public function getBuildDir(): string
@@ -265,6 +270,7 @@ abstract class AbstractKernel implements KernelInterface
             $this->configuration()->packagePrefixes(),
             $this->projectDir,
             $this->environment,
+            $this->getCacheDir(),
         ))->discover();
         $this->bundles = $this->bundleMap($this->bundleRegistry);
 
@@ -373,7 +379,7 @@ abstract class AbstractKernel implements KernelInterface
 
     private function configuration(): KernelConfigurationResolver
     {
-        return new KernelConfigurationResolver(
+        return $this->configuration ??= new KernelConfigurationResolver(
             $this->projectDir,
             $this->environment,
             $this->config,
@@ -433,6 +439,8 @@ abstract class AbstractKernel implements KernelInterface
         $this->container = null;
         $this->bundleRegistry = null;
         $this->bundles = [];
+        $this->configuration = null;
+        $this->cacheDir = null;
     }
 
     /** @return array<string, BundleInterface> */

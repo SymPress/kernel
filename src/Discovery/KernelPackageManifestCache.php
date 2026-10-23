@@ -22,11 +22,13 @@ final class KernelPackageManifestCache
 
     /**
      * @param list<string> $packagePrefixes
+     * @param string|null $cacheDir Resolved kernel cache directory; resolved from the project when omitted.
      */
     public function __construct(
         private readonly ?string $projectDir,
         private readonly ?string $environment,
         private readonly array $packagePrefixes,
+        private readonly ?string $cacheDir = null,
     ) {
     }
 
@@ -148,6 +150,10 @@ final class KernelPackageManifestCache
     {
         if ($this->projectDir === null || $this->projectDir === '') {
             return null;
+        }
+
+        if ($this->cacheDir !== null && $this->cacheDir !== '') {
+            return rtrim($this->cacheDir, '/') . '/discovery-packages.json';
         }
 
         $environment = $this->environment;
