@@ -406,12 +406,13 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $previous = getenv('APP_CACHE_DIR');
         putenv('APP_CACHE_DIR=' . $project . '/external');
         try {
-            $resolver = new KernelConfigurationResolver($project, 'test', new TestSiteConfig('test'));
-            self::assertSame($project . '/external/test/kernel', $resolver->cacheDir());
+            // A resolver fixes its cache path for one boot; each precedence step uses a fresh one.
+            $resolver = static fn (): KernelConfigurationResolver => new KernelConfigurationResolver($project, 'test', new TestSiteConfig('test'));
+            self::assertSame($project . '/external/test/kernel', $resolver()->cacheDir());
             $_ENV['APP_CACHE_DIR'] = $project . '/env';
-            self::assertSame($project . '/env/test/kernel', $resolver->cacheDir());
+            self::assertSame($project . '/env/test/kernel', $resolver()->cacheDir());
             $_SERVER['APP_CACHE_DIR'] = $project . '/server';
-            self::assertSame($project . '/server/test/kernel', $resolver->cacheDir());
+            self::assertSame($project . '/server/test/kernel', $resolver()->cacheDir());
         } finally {
             unset($_SERVER['APP_CACHE_DIR'], $_ENV['APP_CACHE_DIR']);
             putenv($previous === false ? 'APP_CACHE_DIR' : 'APP_CACHE_DIR=' . $previous);

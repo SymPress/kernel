@@ -11,6 +11,7 @@ final class KernelConfigurationResolver
 {
     /** @var list<string>|null */
     private ?array $packagePrefixes = null;
+    private ?string $cacheDir = null;
 
     public function __construct(
         private readonly string $projectDir,
@@ -21,7 +22,8 @@ final class KernelConfigurationResolver
 
     public function cacheDir(): string
     {
-        return CachePath::resolve($this->projectDir, $this->environment, $this->serverString('APP_CACHE_DIR'));
+        // Resolving the path walks realpath() and permission checks; a resolver lives for one boot.
+        return $this->cacheDir ??= CachePath::resolve($this->projectDir, $this->environment, $this->serverString('APP_CACHE_DIR'));
     }
 
     public function buildDir(): string

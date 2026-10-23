@@ -31,6 +31,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
+// phpcs:ignore SymPress.Classes.PropertyLimit.TooManyProperties -- The resolver is kept for one boot so the cache path is resolved once per request.
 abstract class AbstractKernel implements KernelInterface
 {
     protected readonly SiteConfig $config;
@@ -45,7 +46,6 @@ abstract class AbstractKernel implements KernelInterface
 
     private ?CoreServiceRegistrar $coreServiceRegistrar = null;
     private ?KernelConfigurationResolver $configuration = null;
-    private ?string $cacheDir = null;
 
     public function __construct(
         protected readonly string $projectDir,
@@ -79,7 +79,6 @@ abstract class AbstractKernel implements KernelInterface
         $this->bundles = [];
         $this->coreServiceRegistrar = null;
         $this->configuration = null;
-        $this->cacheDir = null;
     }
 
     /** @return array{project_dir: string, environment: string, debug: bool} */
@@ -128,8 +127,7 @@ abstract class AbstractKernel implements KernelInterface
 
     public function getCacheDir(): string
     {
-        // Resolving the cache path walks realpath() and permission checks; do it once per boot.
-        return $this->cacheDir ??= $this->configuration()->cacheDir();
+        return $this->configuration()->cacheDir();
     }
 
     public function getBuildDir(): string
@@ -440,7 +438,6 @@ abstract class AbstractKernel implements KernelInterface
         $this->bundleRegistry = null;
         $this->bundles = [];
         $this->configuration = null;
-        $this->cacheDir = null;
     }
 
     /** @return array<string, BundleInterface> */
