@@ -6,9 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
-## Unreleased
+## 1.1.13 — 2026-10-24
 
-- Qualify native Symfony 8.2 service shutdown in the WordPress App lifecycle, with final cleanup, error continuation and shutdown-aware autoconfiguration.
+- Qualify native Symfony 8.2 service shutdown in the WordPress App lifecycle, with final cleanup, error continuation and shutdown-aware autoconfiguration. The native path stays inactive on Symfony 8.1 and Service Contracts 3.7.
+- Finish shutting down every bundle and clear the kernel state when a bundle shutdown throws, then rethrow the first failure.
 
 ## 1.1.12 — 2026-10-24
 
