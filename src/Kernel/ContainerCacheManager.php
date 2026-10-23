@@ -19,7 +19,7 @@ use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 
 final readonly class ContainerCacheManager
 {
-    private const string SOURCES_FILE = 'sources.json';
+    private const string SOURCES_PATTERN = '/^sources_[a-f0-9]{16}\.json$/D';
 
     public function __construct(
         private string $cacheDir,
@@ -168,8 +168,10 @@ final readonly class ContainerCacheManager
                 $filesystem->dumpFile($containerFile, $dump);
                 chmod($containerFile, 0600);
                 // The per-file source manifest is only read when source validation is
-                // enabled, so keep it out of the metadata parsed on every request.
-                $sourcesFile = sprintf('%s/%s', $this->cacheDir, self::SOURCES_FILE);
+                // enabled, so keep it out of the metadata parsed on every request. One
+                // sidecar per generation: a failed rebuild must not change the manifest
+                // that the still-active generation is validated against.
+                $sourcesFile = sprintf('%s/sources_%s.json', $this->cacheDir, $cacheKey);
                 $filesystem->dumpFile($sourcesFile, json_encode(['source_resources' => $sourceResources], JSON_THROW_ON_ERROR));
                 chmod($sourcesFile, 0600);
                 $filesystem->dumpFile(
@@ -181,7 +183,7 @@ final readonly class ContainerCacheManager
                             'config_discovery' => $this->fingerprints->discoveryResourceManifest($configDirectories),
                             'config_resources'   => $configResources,
                             'source_fingerprint' => $sourceFingerprint,
-                            'sources'            => self::SOURCES_FILE,
+                            'sources'            => basename($sourcesFile),
                             'class'              => $class,
                             'file'               => basename($containerFile),
                         ],
@@ -219,12 +221,17 @@ final readonly class ContainerCacheManager
         if (array_key_exists('source_resources', $metadata)) {
             return $metadata['source_resources'];
         }
-        if (($metadata['sources'] ?? null) !== self::SOURCES_FILE) {
+        if ($this->fingerprints->immutable()) {
+            // The policy accepts any recorded manifest; do not read the sidecar for it.
+            return ['immutable' => 'immutable'];
+        }
+        $sources = $metadata['sources'] ?? null;
+        if (!is_string($sources) || preg_match(self::SOURCES_PATTERN, $sources) !== 1 || $sources !== 'sources_' . substr((string) $metadata['class'], strlen('KernelContainer_')) . '.json') {
             return null;
         }
-        $sources = $this->readMetadata(sprintf('%s/%s', $this->cacheDir, self::SOURCES_FILE));
+        $manifest = $this->readMetadata(sprintf('%s/%s', $this->cacheDir, $sources));
 
-        return $sources['source_resources'] ?? null;
+        return $manifest['source_resources'] ?? null;
     }
 
     /** @return array<mixed, mixed>|null */
@@ -255,6 +262,10 @@ final readonly class ContainerCacheManager
             }
 
             unlink($file);
+            $sources = $this->cacheDir . '/sources_' . substr(basename($file), strlen('container_'), 16) . '.json';
+            if (is_file($sources) && !is_link($sources)) {
+                unlink($sources);
+            }
         }
     }
 

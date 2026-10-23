@@ -1148,8 +1148,8 @@ Useful debug points:
 - `kernel.container_configured`, to inspect loaded configuration files.
 - `kernel.container_ready`, to inspect the runtime container.
 - `var/cache/<env>/kernel/meta.json`, to inspect fingerprint, class, and cache
-  file metadata; the per-file source manifest lives next to it in `sources.json`
-  and is read only when source validation is enabled.
+  file metadata; the per-file source manifest of each generation lives next to
+  it in `sources_<key>.json` and is read only when source validation is enabled.
 - The showcase plugin screen for attributes, locators, tags, and lazy services.
 
 ## Symfony Learn More Map
