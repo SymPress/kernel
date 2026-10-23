@@ -264,9 +264,11 @@ final readonly class ContainerCacheManager
 
             unlink($file);
             $sources = $this->cacheDir . '/sources_' . substr(basename($file), strlen('container_'), 16) . '.json';
-            if (is_file($sources) && !is_link($sources)) {
-                unlink($sources);
+            if (!is_file($sources) || is_link($sources)) {
+                continue;
             }
+
+            unlink($sources);
         }
     }
 
