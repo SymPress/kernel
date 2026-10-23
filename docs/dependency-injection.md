@@ -861,6 +861,13 @@ final class ContextAwareService
 This follows Symfony's synthetic service concept and applies it to the bridge
 between the compiled container and the running WordPress application.
 
+`WpContext` describes the request type, not the caller. Its flags are derived from
+request data such as the `rest_route` query argument, `interim-login`, the script
+name and later WordPress actions (`rest_api_init`, `login_init`, `current_screen`),
+so a client can influence them. Use them to choose behavior per context; never
+use them as an authorization check. Capabilities, nonces and REST permission
+callbacks remain the only trust boundary.
+
 Services that implement `Symfony\Contracts\Service\ResetInterface` are
 autoconfigured with the `kernel.reset` tag and reset through
 `services_resetter`. Service subscribers and service locators are also
