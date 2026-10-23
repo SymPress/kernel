@@ -133,6 +133,38 @@ namespace {
             $GLOBALS['kernel_test_plugins_cache_cleaned'] = $clearUpdateCache;
         }
     }
+
+    if (!function_exists('get_current_user_id')) {
+        function get_current_user_id(): int
+        {
+            return 7;
+        }
+    }
+
+    if (!function_exists('set_transient')) {
+        function set_transient(string $transient, mixed $value, int $expiration = 0): bool
+        {
+            $GLOBALS['kernel_test_transients'][$transient] = $value;
+
+            return true;
+        }
+    }
+
+    if (!function_exists('get_transient')) {
+        function get_transient(string $transient): mixed
+        {
+            return $GLOBALS['kernel_test_transients'][$transient] ?? false;
+        }
+    }
+
+    if (!function_exists('delete_transient')) {
+        function delete_transient(string $transient): bool
+        {
+            unset($GLOBALS['kernel_test_transients'][$transient]);
+
+            return true;
+        }
+    }
 }
 
 namespace SymPress\Kernel\Tests\Admin {
@@ -197,6 +229,24 @@ namespace SymPress\Kernel\Tests\Admin {
                 'kernel-packages',
                 $GLOBALS['kernel_test_admin_menu_pages'][0]['menu_slug'],
             );
+        }
+
+        public function testNoticeMessagesTravelThroughAUserTransientNotTheUrl(): void
+        {
+            $GLOBALS['kernel_test_transients'] = [];
+            $_GET['kernel-package-message'] = 'Crafted link text';
+
+            try {
+                $this->invokePageMethod('stashNoticeMessage', 'Package not found.');
+
+                self::assertSame(['kernel_package_notice_7' => 'Package not found.'], $GLOBALS['kernel_test_transients']);
+                self::assertSame('Package not found.', $this->invokePageMethod('takeNoticeMessage'));
+                self::assertSame([], $GLOBALS['kernel_test_transients']);
+                self::assertSame('', $this->invokePageMethod('takeNoticeMessage'));
+                self::assertSame('Package action failed.', $this->invokePageMethod('noticeMessage', 'error', ''));
+            } finally {
+                unset($GLOBALS['kernel_test_transients'], $_GET['kernel-package-message']);
+            }
         }
 
         public function testActionsAreBlockedWhenWordPressDisallowsFileModifications(): void

@@ -12,6 +12,8 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 final class ContainerResourceFingerprinter
 {
+    private ?bool $immutable = null;
+
     public function __construct(
         private readonly string $projectDir,
         private readonly string $environment,
@@ -233,14 +235,22 @@ final class ContainerResourceFingerprinter
 
     public function immutable(): bool
     {
+        // The policy is read once per fingerprinter; fingerprint() asks for it per bundle.
+        if ($this->immutable !== null) {
+            return $this->immutable;
+        }
         $enabled = $_SERVER['SYMPRESS_KERNEL_IMMUTABLE_CACHE'] ?? $_ENV['SYMPRESS_KERNEL_IMMUTABLE_CACHE'] ?? getenv('SYMPRESS_KERNEL_IMMUTABLE_CACHE');
         if (filter_var($enabled, FILTER_VALIDATE_BOOL) !== true) {
+            $this->immutable = false;
+
             return false;
         }
         $build = defined('SYMPRESS_KERNEL_BUILD_ID') ? constant('SYMPRESS_KERNEL_BUILD_ID') : ($_SERVER['SYMPRESS_KERNEL_BUILD_ID'] ?? $_ENV['SYMPRESS_KERNEL_BUILD_ID'] ?? getenv('SYMPRESS_KERNEL_BUILD_ID'));
         if (!is_string($build) || $build === '') {
             throw new \RuntimeException('Immutable kernel cache requires an explicit deployment build ID.');
         }
+        $this->immutable = true;
+
         return true;
     }
 
