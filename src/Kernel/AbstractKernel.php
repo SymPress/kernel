@@ -30,6 +30,7 @@ use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Throwable;
 
 // phpcs:ignore SymPress.Classes.PropertyLimit.TooManyProperties -- The resolver is kept for one boot so the cache path is resolved once per request.
 abstract class AbstractKernel implements KernelInterface
@@ -428,16 +429,52 @@ abstract class AbstractKernel implements KernelInterface
             return;
         }
 
-        foreach (array_reverse($this->bundles) as $bundle) {
-            $bundle->shutdown();
-            $bundle->setContainer(null);
+        // Mark the lifecycle closed before invoking callbacks, including reentrant ones.
+        $this->booted = false;
+        $failure = null;
+        try {
+            foreach (array_reverse($this->bundles) as $bundle) {
+                try {
+                    $bundle->shutdown();
+                } catch (Throwable $error) {
+                    $failure ??= $error;
+                }
+                try {
+                    $bundle->setContainer(null);
+                } catch (Throwable $error) {
+                    $failure ??= $error;
+                }
+            }
+
+            try {
+                $this->shutdownServices();
+            } catch (Throwable $error) {
+                $failure ??= $error;
+            }
+        } finally {
+            $this->container = null;
+            $this->bundleRegistry = null;
+            $this->bundles = [];
+            $this->configuration = null;
         }
 
-        $this->booted = false;
-        $this->container = null;
-        $this->bundleRegistry = null;
-        $this->bundles = [];
-        $this->configuration = null;
+        if ($failure !== null) {
+            throw $failure;
+        }
+    }
+
+    private function shutdownServices(): void
+    {
+        if (!$this->container?->has('services_resetter')) {
+            return;
+        }
+
+        $resetter = $this->container->get('services_resetter');
+        if ($resetter === null) {
+            return;
+        }
+
+        NativeServiceShutdown::reset($resetter);
     }
 
     /** @return array<string, BundleInterface> */

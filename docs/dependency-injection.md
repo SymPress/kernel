@@ -1234,3 +1234,44 @@ identity. The second builder is fresh, uses the final `kernel.container_class`,
 and must observe the same resource set before publication. Warm loads do not
 compile again. Explicit immutable deployment mode skips these checks under its
 required build-ID contract.
+
+## Final service shutdown (Symfony 8.2 qualification)
+
+SymPress explicitly integrates the native `Symfony\Contracts\Service\ShutdownInterface`
+with its own kernel lifecycle. Merely upgrading DependencyInjection does not call
+this lifecycle. With a native shutdown-aware `services_resetter`, App registers a
+PHP shutdown callback after boot. WordPress has already registered its shutdown
+action dispatcher at this point, so its shutdown actions run before final service
+cleanup. A weak reference avoids retaining replaced App instances. An explicit
+`KernelInterface::shutdown()` also performs final cleanup and is idempotent.
+
+Shutdown first calls bundles in reverse order, detaches their containers, and then
+calls the native resetter with `reset(true)`. The first failure is rethrown after
+remaining bundles and services have had an opportunity to clean up; App reports
+errors from the PHP shutdown callback through its existing error handling. Kernel
+state is cleared even on failure. Reentrant shutdown callbacks cannot repeat work.
+If a post-boot application hook fails, native kernel cleanup runs immediately,
+keeping a later boot attempt from retaining the failed container. The original
+boot error remains the reported error.
+
+Services implementing the native ShutdownInterface receive `reset(false)` during
+ordinary resets and `reset(true)` during final cleanup. Autoconfiguration adds the
+`on_shutdown: flag` attribute to their existing `reset` tag without duplicating
+it. Explicit tag attributes are preserved. Services with a separate close method
+can use `kernel.reset: { method: close, on_shutdown: only }`; use this attribute
+only with DependencyInjection 8.2. The native compiler/resetter owns validation,
+lazy-service handling and non-shared service tracking. Uninitialized services are
+not created for cleanup. No Symfony implementation is copied into SymPress.
+
+DependencyInjection 8.1 and Service Contracts 3.7 remain supported. On those
+versions the new integration is inactive and ordinary ResetInterface behavior is
+preserved. Service Contracts 3.8 alone is insufficient: the installed native
+resetter must implement ShutdownInterface. Symfony 8.2 and Contracts 3.8 are still
+unreleased as of 2026-10-23; publish only after stable versions and consumer checks
+have confirmed the final contract.
+
+Framework consumers only gain shutdown behavior for services that their installed
+bundle actually tags or autoconfigures. Doctrine connection closure must be
+checked against the installed DoctrineBundle configuration. Mailer transports
+must expose/tag their native final reset; upgrading this kernel does not invent
+close callbacks or change delivery semantics.
