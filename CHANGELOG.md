@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.14 — 2026-11-06
+
+- Require the patched Symfony Config, Filesystem, HttpFoundation, HttpKernel, Routing and Yaml components from the 8.1.11 security release.
+- Rebuild the production kernel cache after upgrading so compiled route tables include the fix for CVE-2026-118516.
+
 ## 1.1.13 — 2026-10-24
 
 - Qualify native Symfony 8.2 service shutdown in the WordPress App lifecycle, with final cleanup, error continuation and shutdown-aware autoconfiguration. The native path stays inactive on Symfony 8.1 and Service Contracts 3.7.
