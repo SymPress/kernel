@@ -31,9 +31,12 @@ final class SymfonySecurityCompatibilityTest extends TestCase
     {
         yield 'expression initial incomplete fix' => ['symfony/expression-language', '8.1.6', '8.1.9'];
         yield 'expression last affected patch' => ['symfony/expression-language', '8.1.8', '8.1.9'];
-        yield 'yaml inline lexer' => ['symfony/yaml', '8.1.5', '8.1.6'];
-        yield 'header parser' => ['symfony/http-foundation', '8.1.6', '8.1.9'];
-        yield 'header whitespace separator regression' => ['symfony/http-foundation', '8.1.8', '8.1.9'];
+        yield 'yaml inline lexer' => ['symfony/yaml', '8.1.5', '8.1.11'];
+        yield 'header parser' => ['symfony/http-foundation', '8.1.6', '8.1.11'];
+        yield 'header whitespace separator regression' => ['symfony/http-foundation', '8.1.8', '8.1.11'];
+        foreach (['config', 'filesystem', 'http-foundation', 'http-kernel', 'routing', 'yaml'] as $component) {
+            yield $component . ' November security boundary' => ['symfony/' . $component, '8.1.10', '8.1.11'];
+        }
     }
 
     #[DataProvider('deepExpressions')]

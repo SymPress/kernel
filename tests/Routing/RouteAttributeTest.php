@@ -36,6 +36,9 @@ namespace SymPress\Kernel\Tests\Routing {
     use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
     use Symfony\Component\Filesystem\Filesystem;
     use Symfony\Component\HttpFoundation\Request;
+    use Symfony\Component\Routing\Exception\ResourceNotFoundException;
+    use Symfony\Component\Routing\Matcher\CompiledUrlMatcher;
+    use Symfony\Component\Routing\RequestContext;
 
     final class RouteAttributeTest extends TestCase
     {
@@ -79,6 +82,34 @@ namespace SymPress\Kernel\Tests\Routing {
             self::assertNotNull($methodMismatch);
             self::assertSame(405, $methodMismatch->getStatusCode());
             self::assertSame('GET', $methodMismatch->headers->get('Allow'));
+        }
+
+        public function testCompiledHostPlaceholderCannotConsumeTheRequestPath(): void
+        {
+            $route = [
+                'name' => 'report',
+                'path' => '/admin/report/{id}',
+                'methods' => ['GET'],
+                'schemes' => [],
+                'host' => 'app.{domain}',
+                'defaults' => [],
+                'requirements' => ['domain' => '.+'],
+                'options' => [],
+                'condition' => '',
+                'priority' => 0,
+                'service' => 'demo',
+                'class' => 'Demo',
+                'method' => 'run',
+            ];
+            $matcher = new CompiledUrlMatcher(
+                RouteLoader::compileRoutes([$route]),
+                new RequestContext(host: 'app.example.com'),
+            );
+
+            self::assertSame('report', $matcher->match('/admin/report/1')['_route']);
+
+            $this->expectException(ResourceNotFoundException::class);
+            $matcher->match('/x./admin/report/1');
         }
 
         public function testRoutesWithConditionsKeepTheRuntimeMatcher(): void
