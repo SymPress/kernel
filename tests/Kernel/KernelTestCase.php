@@ -94,6 +94,14 @@ abstract class KernelTestCase extends TestCase
         );
     }
 
+    protected function metaFile(string $cacheDir): string
+    {
+        $files = glob($cacheDir . '/meta_*.json') ?: [];
+        self::assertCount(1, $files);
+
+        return $files[0];
+    }
+
     protected function tmpPath(string $prefix): string
     {
         $path = sprintf('%s/%s-%s', sys_get_temp_dir(), $prefix, uniqid('', true));

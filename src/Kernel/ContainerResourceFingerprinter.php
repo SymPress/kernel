@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SymPress\Kernel\Kernel;
 
+use SymPress\Kernel\Bundle\BundleMetadata;
 use SymPress\Kernel\Bundle\BundleRegistry;
 use Symfony\Component\Config\Resource\DirectoryResource;
 use Symfony\Component\Config\Resource\FileExistenceResource;
@@ -42,7 +43,7 @@ final class ContainerResourceFingerprinter
         ];
 
         foreach ($bundles->all() as $bundle) {
-            $parts[] = implode(':', [$bundle->package(), $bundle->type(), $bundle->entry(), $bundle->path(), $bundle->bundle()->id()]);
+            $parts[] = $this->bundleIdentity($bundle);
             if ($this->immutable()) {
                 continue;
             }
@@ -56,6 +57,15 @@ final class ContainerResourceFingerprinter
         array_push($parts, ...$configFiles);
 
         return hash('sha256', implode('|', $parts));
+    }
+
+    /**
+     * Multisite sites can activate different bundles, so each bundle set keeps its
+     * own metadata instead of overwriting one shared file on every site switch.
+     */
+    public function bundleSetKey(BundleRegistry $bundles): string
+    {
+        return substr(hash('sha256', implode('|', array_map($this->bundleIdentity(...), $bundles->all()))), 0, 16);
     }
 
     public function tracksSourceChanges(): bool
@@ -288,6 +298,11 @@ final class ContainerResourceFingerprinter
             }
         }
         return true;
+    }
+
+    private function bundleIdentity(BundleMetadata $bundle): string
+    {
+        return implode(':', [$bundle->package(), $bundle->type(), $bundle->entry(), $bundle->path(), $bundle->bundle()->id()]);
     }
 
     private function resourceTrackingDisabled(): bool
