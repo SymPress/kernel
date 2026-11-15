@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.15 — 2026-11-15
+
+- Trust a kernel cache directory only when the PHP process user owns it and no parent up to the project (or up to `/` outside the project) is group/world-writable without the sticky bit. Compiled containers and `discovery-packages.json` must be owned by the same user. A local user who can write to `var/cache` can no longer plant a `kernel/` directory whose PHP the kernel executes. An untrusted implicit cache moves to the private fallback; an explicit `APP_CACHE_DIR` below a shared parent now fails with a diagnostic.
+
 ## 1.1.14 — 2026-11-06
 
 - Require the patched Symfony Config, Filesystem, HttpFoundation, HttpKernel, Routing and Yaml components from the 8.1.11 security release.
