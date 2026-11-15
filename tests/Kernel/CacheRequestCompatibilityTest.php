@@ -6,6 +6,8 @@ namespace SymPress\Kernel\Tests\Kernel;
 
 use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Kernel\CachePath;
+use SymPress\Kernel\Kernel\ContainerCacheManager;
+use SymPress\Kernel\Kernel\ContainerResourceFingerprinter;
 use SymPress\Kernel\Discovery\KernelPackageManifestCache;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
@@ -47,6 +49,37 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
         self::assertSame($old, hash_file('sha256', $directory . '/meta.php'));
         self::assertSame(0600, fileperms($cache . '/discovery-packages.json') & 0777);
         (new Filesystem())->remove($cache);
+    }
+
+    public function testCacheBelowParentWritableByOthersIsNotTrusted(): void
+    {
+        $project = $this->tmpPath('shared-cache-parent');
+        $kernel = $this->kernel($project);
+        $container = $kernel->createContainer();
+        $files = $kernel->configureContainer($container->builder(), $container, new BundleRegistry());
+        $kernel->createRuntimeContainer($container, new BundleRegistry(), $files);
+        $directory = $project . '/var/cache/test/kernel';
+        $discovery = new KernelPackageManifestCache($project, 'test', ['sympress/'], $directory);
+        $discovery->write(['sympress/kernel']);
+        $manager = new ContainerCacheManager($directory, false, new ContainerResourceFingerprinter($project, 'test', false));
+        // Sticky shared parents cannot rename entries owned by this process.
+        chmod($project . '/var/cache', 01777);
+        self::assertTrue($manager->tryUseRuntimeContainer($kernel->createContainer(), new BundleRegistry(), []));
+        self::assertSame($directory, CachePath::resolve($project, 'test'));
+        // Without the sticky bit, another user could swap in a planted kernel directory.
+        chmod($project . '/var/cache', 0777);
+        self::assertFalse($manager->tryUseRuntimeContainer($kernel->createContainer(), new BundleRegistry(), []));
+        self::assertNull($discovery->read());
+        self::assertStringStartsWith($project . '/var/cache-private-', CachePath::resolve($project, 'test'));
+        try {
+            CachePath::resolve($project, 'test', $project . '/var/cache');
+            self::fail('Explicit cache below a shared parent was accepted.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('APP_CACHE_DIR', $exception->getMessage());
+        }
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('other users can replace');
+        $manager->createRuntimeContainer($container, new BundleRegistry(), $files);
     }
 
     public function testSuccessiveRequestsUseMetadataWithoutHashesOrOpcacheInvalidation(): void

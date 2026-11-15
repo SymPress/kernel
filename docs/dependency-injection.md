@@ -1015,7 +1015,11 @@ path is shared by CLI and PHP-FPM even with systemd PrivateTmp. If the project i
 the webroot or a cold project cannot be written, the implicit cache uses a
 project-specific, owner-checked directory under the system temporary directory,
 outside DOCUMENT_ROOT/WP_CONTENT_DIR. Pre-created symlinks, other owners and
-group/world-writable directories are rejected. This fallback restores automatic
+group/world-writable directories are rejected. Every cache directory, implicit or
+configured, must be owned by the PHP process user, and no parent up to the project
+(or up to `/` for a cache outside the project) may be group/world-writable unless it
+has the sticky bit; compiled containers and discovery manifests must be owned by the
+same user. An untrusted implicit cache moves to the private fallback. This fallback restores automatic
 boot for classic and read-only WordPress projects; it is not a shared deployment
 cache when CLI and FPM have different users or PrivateTmp namespaces. An explicit
 unsafe `APP_CACHE_DIR` still fails with an actionable diagnostic. Provision an

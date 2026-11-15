@@ -39,7 +39,7 @@ final readonly class ContainerCacheManager
         $lockFile = sprintf('%s/container.lock', $this->cacheDir);
         if (
             !is_file($metaFile) || !is_file($lockFile) || is_link($metaFile) || is_link($lockFile)
-            || is_link($this->cacheDir) || (fileperms($this->cacheDir) & 0022) !== 0
+            || !CachePath::isTrusted($this->cacheDir, $this->fingerprints->projectDir())
         ) {
             return false;
         }
@@ -83,6 +83,9 @@ final readonly class ContainerCacheManager
 
         $filesystem = new Filesystem();
         CachePath::ensureDirectory($this->cacheDir);
+        if (!CachePath::isTrusted($this->cacheDir, $this->fingerprints->projectDir())) {
+            throw new \RuntimeException('Refusing a kernel cache directory that other users can replace; check its owner and parent directories.');
+        }
         $metaFile = sprintf('%s/meta.json', $this->cacheDir);
         $lockFile = sprintf('%s/container.lock', $this->cacheDir);
         $fingerprint = $this->fingerprints->fingerprint($bundles, $configFiles);
@@ -379,7 +382,7 @@ final readonly class ContainerCacheManager
 
         $cachedContainerFile = sprintf('%s/%s', $this->cacheDir, basename($metadata['file']));
 
-        if (!is_file($cachedContainerFile) || is_link($cachedContainerFile)) {
+        if (!is_file($cachedContainerFile) || !CachePath::ownedByProcess($cachedContainerFile)) {
             return false;
         }
 
