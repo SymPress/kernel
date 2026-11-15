@@ -42,7 +42,7 @@ final class KernelPackageManifestCache
             return null;
         }
 
-        if (is_link($file) || is_link(dirname($file)) || (fileperms(dirname($file)) & 0022) !== 0) {
+        if (!CachePath::ownedByProcess($file) || !CachePath::isTrusted(dirname($file), (string) $this->projectDir)) {
             return null;
         }
         try {
@@ -116,6 +116,9 @@ final class KernelPackageManifestCache
 
         try {
             CachePath::ensureDirectory($directory);
+            if (!CachePath::isTrusted($directory, (string) $this->projectDir)) {
+                return;
+            }
         } catch (\RuntimeException) {
             return;
         }

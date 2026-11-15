@@ -21,6 +21,11 @@ final class ContainerResourceFingerprinter
     ) {
     }
 
+    public function projectDir(): string
+    {
+        return $this->projectDir;
+    }
+
     /** @param array<int, string> $configFiles */
     public function fingerprint(BundleRegistry $bundles, array $configFiles): string
     {
