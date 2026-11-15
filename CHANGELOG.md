@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.16 — 2026-11-16
+
+- Keep compiled-container metadata per bundle set in `meta_<bundle-set>.json` instead of one shared `meta.json`. On multisite, sites with different SymPress plugins or themes no longer overwrite each other's metadata, so requests alternating between them stop recompiling the container under the exclusive lock. Cleanup keeps every generation that metadata still references and caps metadata at 32 bundle sets. The legacy `meta.json` is ignored and removed; the first request after the upgrade compiles once per bundle set.
 ## 1.1.15 — 2026-11-15
 
 - Trust a kernel cache directory only when the PHP process user owns it and no parent up to the project (or up to `/` outside the project) is group/world-writable without the sticky bit. Compiled containers and `discovery-packages.json` must be owned by the same user. A local user who can write to `var/cache` can no longer plant a `kernel/` directory whose PHP the kernel executes. An untrusted implicit cache moves to the private fallback; an explicit `APP_CACHE_DIR` below a shared parent now fails with a diagnostic.
