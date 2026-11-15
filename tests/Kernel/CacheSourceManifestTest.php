@@ -19,18 +19,19 @@ final class CacheSourceManifestTest extends KernelTestCase
         $container = $kernel->createContainer();
         $kernel->createRuntimeContainer($container, $registry, $kernel->configureContainer($container->builder(), $container, $registry));
         $cacheDir = "{$projectDir}/var/cache/test/kernel";
-        $metadata = json_decode((string) file_get_contents("{$cacheDir}/meta.json"), true, flags: JSON_THROW_ON_ERROR);
+        $metaFile = $this->metaFile("{$projectDir}/var/cache/test/kernel");
+        $metadata = json_decode((string) file_get_contents($metaFile), true, flags: JSON_THROW_ON_ERROR);
         $sources = json_decode((string) file_get_contents("{$cacheDir}/{$metadata['sources']}"), true, flags: JSON_THROW_ON_ERROR);
         $sidecar = $metadata['sources'];
         unset($metadata['sources']);
         $metadata['source_resources'] = $sources['source_resources'];
-        file_put_contents("{$cacheDir}/meta.json", json_encode($metadata, JSON_THROW_ON_ERROR));
+        file_put_contents($metaFile, json_encode($metadata, JSON_THROW_ON_ERROR));
         unlink("{$cacheDir}/{$sidecar}");
 
         self::assertTrue($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
 
         unset($metadata['source_resources']);
-        file_put_contents("{$cacheDir}/meta.json", json_encode($metadata, JSON_THROW_ON_ERROR));
+        file_put_contents($metaFile, json_encode($metadata, JSON_THROW_ON_ERROR));
 
         self::assertFalse($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
     }

@@ -997,7 +997,7 @@ wp console container:dump --format=yaml
 ## Runtime Cache
 
 Both debug and production use compiled-container cache hits. A hit loads recorded
-config paths from `meta.json`, validates consumed input signatures, and takes a shared
+config paths from `meta_<bundle-set>.json`, validates consumed input signatures, and takes a shared
 reader lock; it does not execute config loaders or rebuild discovery globs. Only
 misses take the exclusive writer lock and recheck after waiting. Writer metadata
 and container publication are atomic, private files use mode 0600, and newly
@@ -1031,7 +1031,7 @@ Keep configured cache parents trusted and outside DOCUMENT_ROOT/WP_CONTENT_DIR.
 Normal validation compares modification time and size for root/package Composer
 metadata and consumed configuration, including imports. Warm requests do not read
 these file contents. Container metadata and discovery descriptors are atomic JSON
-files (`meta.json` and `discovery-packages.json`), so their replacement by a CLI
+files (`meta_<bundle-set>.json` and `discovery-packages.json`), so their replacement by a CLI
 writer is visible to existing FPM workers even with OPcache timestamp validation
 disabled. Unchanged mutable and immutable readers do not invalidate OPcache.
 Compiled containers remain PHP files with generation-specific names; writers
@@ -1163,8 +1163,10 @@ Useful debug points:
 
 - `kernel.container_configured`, to inspect loaded configuration files.
 - `kernel.container_ready`, to inspect the runtime container.
-- `var/cache/<env>/kernel/meta.json`, to inspect fingerprint, class, and cache
-  file metadata; the per-file source manifest of each generation lives next to
+- `var/cache/<env>/kernel/meta_<bundle-set>.json`, to inspect fingerprint, class, and cache
+  file metadata. Each set of active bundles (for example a multisite site with
+  other SymPress plugins or another theme) has its own metadata file, so sites do
+  not invalidate each other's container; up to 32 bundle sets are kept; the per-file source manifest of each generation lives next to
   it in `sources_<key>.json` and is read only when source validation is enabled.
 - The showcase plugin screen for attributes, locators, tags, and lazy services.
 

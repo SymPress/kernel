@@ -136,7 +136,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $loaded = $kernel->configureContainer($container->builder(), $container, $registry);
         $kernel->createRuntimeContainer($container, $registry, $loaded);
         $cacheDir = "{$projectDir}/var/cache/test/kernel";
-        $metadata = json_decode((string) file_get_contents("{$cacheDir}/meta.json"), true, flags: JSON_THROW_ON_ERROR);
+        $metadata = json_decode((string) file_get_contents($this->metaFile($cacheDir)), true, flags: JSON_THROW_ON_ERROR);
         // The per-file manifest stays out of the metadata parsed on every request.
         self::assertArrayNotHasKey('source_resources', $metadata);
         self::assertSame('sources_' . substr($metadata['class'], strlen('KernelContainer_')) . '.json', $metadata['sources']);
@@ -317,7 +317,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $lock = fopen($directory . '/container.lock', 'r+');
         flock($lock, LOCK_EX);
         try {
-            $cleanup->invoke($manager, $active);
+            $cleanup->invoke($manager, $active, $this->metaFile($directory));
         } finally {
             flock($lock, LOCK_UN);
             fclose($lock);
@@ -337,7 +337,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $container = $kernel->createContainer();
         $files = $kernel->configureContainer($container->builder(), $container, new BundleRegistry());
         $kernel->createRuntimeContainer($container, new BundleRegistry(), $files);
-        file_put_contents($project . '/var/cache/test/kernel/meta.json', '{ broken syntax');
+        file_put_contents($this->metaFile($project . '/var/cache/test/kernel'), '{ broken syntax');
         self::assertFalse($kernel->tryUseRuntimeContainer($kernel->createContainer(), new BundleRegistry()));
         file_put_contents($file, '<?php throw new \RuntimeException("configuration failure");');
         try {
@@ -359,7 +359,7 @@ final class RuntimeCacheCompatibilityTest extends KernelTestCase
         $container = $kernel->createContainer();
         $files = $kernel->configureContainer($container->builder(), $container, $registry);
         $kernel->createRuntimeContainer($container, $registry, $files);
-        $path = $project . '/var/cache/test/kernel/meta.json';
+        $path = $this->metaFile($project . '/var/cache/test/kernel');
         foreach ([[0 => 'malformed'], ['invalid' => ['nested']]] as $resources) {
             $metadata = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
             $metadata['config_resources'] = $resources;

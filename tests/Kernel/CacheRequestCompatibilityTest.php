@@ -146,7 +146,7 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
         $container = $kernel->createContainer();
         $files = $kernel->configureContainer($container->builder(), $container, new BundleRegistry());
         $kernel->createRuntimeContainer($container, new BundleRegistry(), $files);
-        $metaFile = $project . '/var/cache/test/kernel/meta.json';
+        $metaFile = $this->metaFile($project . '/var/cache/test/kernel');
         $metadata = json_decode(file_get_contents($metaFile), true, flags: JSON_THROW_ON_ERROR);
         unset($metadata['config_resources'][$file]);
         file_put_contents($metaFile, json_encode($metadata, JSON_THROW_ON_ERROR));
@@ -172,7 +172,7 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
         $files = $kernel->configureContainer($container->builder(), $container, $bundles);
         $kernel->createRuntimeContainer($container, $bundles, $files);
         self::assertTrue($kernel->tryUseRuntimeContainer($kernel->createContainer(), $bundles));
-        self::assertFileExists($directory . '/meta.json');
+        self::assertFileExists($this->metaFile($directory));
     }
 
     public function testReadOnlyColdProjectBootsWithPrivateFallback(): void
@@ -192,7 +192,7 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
             $discovery->write(['sympress/kernel']);
             self::assertSame(['sympress/kernel'], $discovery->read());
             self::assertSame(0700, fileperms(dirname($cache, 2)) & 0777);
-            self::assertSame(0600, fileperms($cache . '/meta.json') & 0777);
+            self::assertSame(0600, fileperms($this->metaFile($cache)) & 0777);
         } finally {
             chmod($project, 0700);
             (new Filesystem())->remove(dirname($cache, 2));

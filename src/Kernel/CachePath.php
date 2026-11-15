@@ -36,7 +36,7 @@ final class CachePath
             }
             return self::privateFallback($project, $environment);
         }
-        if ($configured === null && !is_file($path . '/meta.json') && !self::writableAncestor($path)) {
+        if ($configured === null && !self::writableAncestor($path) && (glob($path . '/meta_*.json') ?: []) === []) {
             return self::privateFallback($project, $environment);
         }
         return $path;

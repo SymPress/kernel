@@ -20,6 +20,9 @@ use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 final readonly class ContainerCacheManager
 {
     private const string SOURCES_PATTERN = '/^sources_[a-f0-9]{16}\.json$/D';
+    private const string META_PATTERN = '/^meta_[a-f0-9]{16}\.json$/D';
+    // Bounds metadata (and the generations it pins) left behind by retired bundle sets.
+    private const int MAX_BUNDLE_SETS = 32;
 
     public function __construct(
         private string $cacheDir,
@@ -35,7 +38,7 @@ final readonly class ContainerCacheManager
         array $runtimeConfigFiles,
     ): bool {
 
-        $metaFile = sprintf('%s/meta.json', $this->cacheDir);
+        $metaFile = $this->metaFile($bundles);
         $lockFile = sprintf('%s/container.lock', $this->cacheDir);
         if (
             !is_file($metaFile) || !is_file($lockFile) || is_link($metaFile) || is_link($lockFile)
@@ -86,7 +89,7 @@ final readonly class ContainerCacheManager
         if (!CachePath::isTrusted($this->cacheDir, $this->fingerprints->projectDir())) {
             throw new \RuntimeException('Refusing a kernel cache directory that other users can replace; check its owner and parent directories.');
         }
-        $metaFile = sprintf('%s/meta.json', $this->cacheDir);
+        $metaFile = $this->metaFile($bundles);
         $lockFile = sprintf('%s/container.lock', $this->cacheDir);
         $fingerprint = $this->fingerprints->fingerprint($bundles, $configFiles);
         if (is_link($lockFile)) {
@@ -201,7 +204,7 @@ final readonly class ContainerCacheManager
             } finally {
                 umask($previousMask);
             }
-            $this->cleanupContainers($containerFile);
+            $this->cleanupContainers($containerFile, $metaFile);
 
             if (!class_exists($class, false)) {
                 require $containerFile;
@@ -253,15 +256,33 @@ final readonly class ContainerCacheManager
         }
     }
 
-    private function cleanupContainers(string $active): void
+    private function metaFile(BundleRegistry $bundles): string
     {
-        $files = array_values(array_filter(
-            glob($this->cacheDir . '/container_*.php') ?: [],
-            static fn (string $file): bool => !is_link($file) && preg_match('/^container_[a-f0-9]{16}\.php$/D', basename($file)) === 1,
-        ));
-        usort($files, static fn (string $left, string $right): int => (int) filemtime($right) <=> (int) filemtime($left));
+        return sprintf('%s/meta_%s.json', $this->cacheDir, $this->fingerprints->bundleSetKey($bundles));
+    }
+
+    private function cleanupContainers(string $active, string $activeMeta): void
+    {
+        // The single metadata file of releases before 1.1.16 is never read again.
+        $legacy = $this->cacheDir . '/meta.json';
+        if (is_file($legacy) && !is_link($legacy)) {
+            unlink($legacy);
+        }
+        $referenced = [$active];
+        foreach ($this->newestFirst('/meta_*.json', self::META_PATTERN) as $index => $meta) {
+            if ($meta !== $activeMeta && $index >= self::MAX_BUNDLE_SETS) {
+                unlink($meta);
+                continue;
+            }
+            $file = $this->readMetadata($meta)['file'] ?? null;
+            if (!is_string($file)) {
+                continue;
+            }
+            $referenced[] = $this->cacheDir . '/' . basename($file);
+        }
+        $files = $this->newestFirst('/container_*.php', '/^container_[a-f0-9]{16}\.php$/D');
         foreach (array_slice($files, 3) as $file) {
-            if ($file === $active || is_link($file) || preg_match('/^container_[a-f0-9]{16}\.php$/D', basename($file)) !== 1 || filemtime($file) >= time() - 3600) {
+            if (in_array($file, $referenced, true) || is_link($file) || preg_match('/^container_[a-f0-9]{16}\.php$/D', basename($file)) !== 1 || filemtime($file) >= time() - 3600) {
                 continue;
             }
 
@@ -273,6 +294,18 @@ final readonly class ContainerCacheManager
 
             unlink($sources);
         }
+    }
+
+    /** @return list<string> */
+    private function newestFirst(string $glob, string $pattern): array
+    {
+        $files = array_values(array_filter(
+            glob($this->cacheDir . $glob) ?: [],
+            static fn (string $file): bool => !is_link($file) && preg_match($pattern, basename($file)) === 1,
+        ));
+        usort($files, static fn (string $left, string $right): int => (int) filemtime($right) <=> (int) filemtime($left));
+
+        return $files;
     }
 
     private function createRuntimeBuilder(Container $container, string $class): ContainerBuilder
