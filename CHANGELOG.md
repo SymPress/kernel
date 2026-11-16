@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.17 — 2026-11-16
+
+- Stop failing the boot when another local user pre-creates the predictable temporary cache root (`<tmp>/sympress-kernel-<uid>-<hash>`) as a directory or symlink. The kernel still never adopts such a path; it reuses or atomically creates a randomly suffixed private sibling (mode 0700, owned by the PHP user) and logs the switch.
+
 ## 1.1.16 — 2026-11-16
 
 - Keep compiled-container metadata per bundle set in `meta_<bundle-set>.json` instead of one shared `meta.json`. On multisite, sites with different SymPress plugins or themes no longer overwrite each other's metadata, so requests alternating between them stop recompiling the container under the exclusive lock. Cleanup keeps every generation that metadata still references and caps metadata at 32 bundle sets. The legacy `meta.json` is ignored and removed; the first request after the upgrade compiles once per bundle set.
