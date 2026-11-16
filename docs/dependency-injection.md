@@ -1015,7 +1015,10 @@ path is shared by CLI and PHP-FPM even with systemd PrivateTmp. If the project i
 the webroot or a cold project cannot be written, the implicit cache uses a
 project-specific, owner-checked directory under the system temporary directory,
 outside DOCUMENT_ROOT/WP_CONTENT_DIR. Pre-created symlinks, other owners and
-group/world-writable directories are rejected. Every cache directory, implicit or
+group/world-writable directories are never adopted: because the name is predictable,
+the kernel then reuses or atomically creates a randomly suffixed private sibling
+(mode 0700, owned by the PHP user) and logs it, so another local user cannot block
+the boot. Every cache directory, implicit or
 configured, must be owned by the PHP process user, and no parent up to the project
 (or up to `/` for a cache outside the project) may be group/world-writable unless it
 has the sticky bit; compiled containers and discovery manifests must be owned by the

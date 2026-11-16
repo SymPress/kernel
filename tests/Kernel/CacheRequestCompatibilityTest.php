@@ -199,7 +199,7 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
         }
     }
 
-    public function testTemporaryFallbackRejectsPrecreatedSymlink(): void
+    public function testTemporaryFallbackAvoidsPrecreatedSymlink(): void
     {
         $project = $this->tmpPath('public-symlink-cache');
         $outside = $this->tmpPath('untrusted-fallback');
@@ -210,15 +210,49 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
             $root = dirname(CachePath::resolve($project, 'test'), 2);
             rmdir($root);
             symlink($outside, $root);
-            $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('symlinked');
-            CachePath::resolve($project, 'test');
+            $this->assertPrivateSiblingOf($root, CachePath::resolve($project, 'test'));
+            self::assertSame([], glob($outside . '/*'));
         } finally {
             unset($_SERVER['DOCUMENT_ROOT']);
-            if ($root !== null && is_link($root)) {
-                unlink($root);
-            }
+            $this->removeTemporaryRoots($root);
         }
+    }
+
+    public function testTemporaryFallbackAvoidsPrecreatedReplaceableDirectory(): void
+    {
+        $project = $this->tmpPath('public-replaceable-cache');
+        $_SERVER['DOCUMENT_ROOT'] = $project;
+        $root = null;
+        try {
+            $root = dirname(CachePath::resolve($project, 'test'), 2);
+            // Stands in for a directory another local user created first.
+            chmod($root, 0777);
+            $cache = CachePath::resolve($project, 'test');
+            $this->assertPrivateSiblingOf($root, $cache);
+            self::assertSame($cache, CachePath::resolve($project, 'test'), 'The private sibling is reused.');
+        } finally {
+            unset($_SERVER['DOCUMENT_ROOT']);
+            $this->removeTemporaryRoots($root);
+        }
+    }
+
+    private function assertPrivateSiblingOf(string $root, string $cache): void
+    {
+        $sibling = dirname($cache, 2);
+        self::assertMatchesRegularExpression('/^' . preg_quote($root, '/') . '\\.[0-9a-f]{16}$/', $sibling);
+        self::assertTrue(CachePath::ownedByProcess($sibling));
+        self::assertSame(0700, fileperms($sibling) & 0777);
+    }
+
+    private function removeTemporaryRoots(?string $root): void
+    {
+        if ($root === null) {
+            return;
+        }
+        if (is_link($root)) {
+            unlink($root);
+        }
+        (new Filesystem())->remove([$root, ...(glob($root . '.*') ?: [])]);
     }
 
     public function testPrivateFallbackVerifiesProcessOwnerWithoutPosixExtension(): void
