@@ -118,8 +118,8 @@ final class CachePath
             if (self::replaceableByOthers(fileperms($temporary))) {
                 throw new \RuntimeException('A private kernel cache requires a trusted temporary parent or APP_CACHE_DIR; shared temporary directories must have the sticky bit.');
             }
-            $root = rtrim($temporary, '/') . '/sympress-kernel-' . $user . '-'
-                . substr(hash('sha256', self::canonical($project)), 0, 24);
+            $root = self::temporaryRoot(rtrim($temporary, '/') . '/sympress-kernel-' . $user . '-'
+                . substr(hash('sha256', self::canonical($project)), 0, 24), $owner);
         }
         if (self::isPublic($root)) {
             throw new \RuntimeException('No private kernel cache is available outside the webroot. Set APP_CACHE_DIR to a durable private directory and warm it as the PHP-FPM user.');
@@ -133,6 +133,35 @@ final class CachePath
             error_log('SymPress migrated its implicit kernel cache to ' . $root . '. Configure APP_CACHE_DIR for a shared deployment cache and warm it as the PHP-FPM user.');
         }
         return $root . '/' . $environment . '/kernel';
+    }
+
+    /**
+     * The temporary root name is predictable, so another local user can create it first.
+     * Never adopt such a path and never fail the boot over it: reuse or atomically create
+     * a randomly named sibling. Only this user can own one, and the sticky temporary
+     * parent keeps others from swapping it, so ownership is enough to find it again.
+     */
+    private static function temporaryRoot(string $root, int $owner): string
+    {
+        if ((!file_exists($root) && !is_link($root)) || self::privateDirectory($root, $owner)) {
+            return $root;
+        }
+        foreach (glob($root . '.*', GLOB_NOESCAPE) ?: [] as $candidate) {
+            if (self::privateDirectory($candidate, $owner)) {
+                return $candidate;
+            }
+        }
+        $candidate = $root . '.' . bin2hex(random_bytes(8));
+        if (!mkdir($candidate, 0700)) {
+            throw new \RuntimeException('Unable to create a private kernel cache next to ' . $root . '; configure APP_CACHE_DIR for the PHP-FPM identity.');
+        }
+        error_log('SymPress found ' . $root . ' not owned privately by the PHP user and uses ' . $candidate . ' as its kernel cache instead. Configure APP_CACHE_DIR for a durable private cache.');
+        return $candidate;
+    }
+
+    private static function privateDirectory(string $path, int $owner): bool
+    {
+        return !is_link($path) && is_dir($path) && fileowner($path) === $owner && (fileperms($path) & 0022) === 0;
     }
 
     private static function isPublic(string $path): bool
