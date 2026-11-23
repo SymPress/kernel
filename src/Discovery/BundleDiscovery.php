@@ -45,6 +45,7 @@ final class BundleDiscovery
     /**
      * @param list<string>|array<string> $packagePrefixes Optional package-name prefixes used to narrow discovery.
      * @param string|null $cacheDir Resolved kernel cache directory; resolved again from the project when omitted.
+     * @param array<mixed, mixed>|null $bundlesConfiguration Already loaded config/bundles.php; required here when omitted.
      */
     public function __construct(
         private readonly ActivePackageResolver $resolver,
@@ -52,6 +53,7 @@ final class BundleDiscovery
         private readonly ?string $projectDir = null,
         private readonly ?string $environment = null,
         private readonly ?string $cacheDir = null,
+        private readonly ?array $bundlesConfiguration = null,
     ) {
 
         $this->packagePrefixes = $this->normalizePackagePrefixes($packagePrefixes);
@@ -166,7 +168,7 @@ final class BundleDiscovery
             return [];
         }
 
-        $configuration = require $configFile;
+        $configuration = $this->bundlesConfiguration ?? require $configFile;
 
         if (!is_array($configuration)) {
             return [];

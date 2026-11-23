@@ -12,6 +12,8 @@ final class KernelConfigurationResolver
     /** @var list<string>|null */
     private ?array $packagePrefixes = null;
     private ?string $cacheDir = null;
+    /** @var array<mixed, mixed>|null */
+    private ?array $bundlesConfiguration = null;
 
     public function __construct(
         private readonly string $projectDir,
@@ -101,19 +103,7 @@ final class KernelConfigurationResolver
             'staging',
             'test',
         ];
-        $bundlesDefinition = sprintf('%s/config/bundles.php', $this->projectDir);
-
-        if (!is_file($bundlesDefinition)) {
-            return $this->normalizeKnownEnvironments($known);
-        }
-
-        $configuration = require $bundlesDefinition;
-
-        if (!is_array($configuration)) {
-            return $this->normalizeKnownEnvironments($known);
-        }
-
-        foreach ($configuration as $envs) {
+        foreach ($this->bundlesConfiguration() as $envs) {
             if (!is_array($envs)) {
                 continue;
             }
@@ -128,6 +118,25 @@ final class KernelConfigurationResolver
         }
 
         return $this->normalizeKnownEnvironments($known);
+    }
+
+    /**
+     * config/bundles.php may declare functions or classes, so it is required once per
+     * resolver and shared by bundle discovery and the known environments.
+     *
+     * @return array<mixed, mixed>
+     */
+    public function bundlesConfiguration(): array
+    {
+        if ($this->bundlesConfiguration !== null) {
+            return $this->bundlesConfiguration;
+        }
+
+        $file = sprintf('%s/config/bundles.php', $this->projectDir);
+        $configuration = is_file($file) ? require $file : [];
+        $this->bundlesConfiguration = is_array($configuration) ? $configuration : [];
+
+        return $this->bundlesConfiguration;
     }
 
     /** @return array<int, string> */
