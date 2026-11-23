@@ -1169,7 +1169,7 @@ Useful debug points:
 - `var/cache/<env>/kernel/meta_<bundle-set>.json`, to inspect fingerprint, class, and cache
   file metadata. Each set of active bundles (for example a multisite site with
   other SymPress plugins or another theme) has its own metadata file, so sites do
-  not invalidate each other's container; up to 32 bundle sets are kept; the per-file source manifest of each generation lives next to
+  not invalidate each other's container; beyond 32 bundle sets, only metadata unused for 30 days is evicted (warm hits refresh its mtime at most hourly); the per-file source manifest of each generation lives next to
   it in `sources_<key>.json` and is read only when source validation is enabled.
 - The showcase plugin screen for attributes, locators, tags, and lazy services.
 

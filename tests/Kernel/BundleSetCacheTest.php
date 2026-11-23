@@ -32,13 +32,14 @@ final class BundleSetCacheTest extends KernelTestCase
         $cacheDir = "{$projectDir}/var/cache/test/kernel";
         self::assertCount(2, glob("{$cacheDir}/container_*.php") ?: []);
 
-        // Metadata of retired bundle sets is bounded; generations it pins go with it.
+        // Metadata of retired (long idle) bundle sets is bounded; generations it pins go with it.
+        $idle = time() - 31 * 86400;
         for ($index = 0; $index < 40; ++$index) {
             $key = sprintf('%016x', $index);
             file_put_contents("{$cacheDir}/meta_{$key}.json", json_encode(['file' => "container_{$key}.php"], JSON_THROW_ON_ERROR));
             file_put_contents("{$cacheDir}/container_{$key}.php", '<?php');
-            touch("{$cacheDir}/meta_{$key}.json", time() - 7200 - $index);
-            touch("{$cacheDir}/container_{$key}.php", time() - 7200 - $index);
+            touch("{$cacheDir}/meta_{$key}.json", $idle - $index);
+            touch("{$cacheDir}/container_{$key}.php", $idle - $index);
         }
         touch($cacheDir . '/meta.json');
         $container = $kernel->createContainer();
@@ -50,5 +51,36 @@ final class BundleSetCacheTest extends KernelTestCase
         foreach ($sites as $registry) {
             self::assertTrue($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
         }
+    }
+
+    public function testMoreThanThirtyTwoLiveBundleSetsDoNotEvictEachOther(): void
+    {
+        $projectDir = $this->tmpPath('multisite-many-sets-project');
+        $kernel = $this->kernel($projectDir);
+        $sites = [];
+        for ($index = 0; $index < 34; ++$index) {
+            $bundleDir = $this->tmpPath("multisite-many-sets-{$index}-bundle");
+            mkdir($bundleDir, 0700);
+            file_put_contents("{$bundleDir}/composer.json", '{}');
+            $registry = $this->registry($bundleDir);
+            $sites[] = $registry;
+            $container = $kernel->createContainer();
+            $kernel->createRuntimeContainer($container, $registry, $kernel->configureContainer($container->builder(), $container, $registry));
+        }
+        $cacheDir = "{$projectDir}/var/cache/test/kernel";
+        self::assertCount(34, glob("{$cacheDir}/meta_*.json") ?: []);
+        foreach ($sites as $registry) {
+            self::assertTrue($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
+        }
+
+        // A warm hit records use (at most hourly), so a live set never looks idle.
+        $meta = glob("{$cacheDir}/meta_*.json") ?: [];
+        touch($meta[0], time() - 32 * 86400);
+        clearstatcache();
+        foreach ($sites as $registry) {
+            self::assertTrue($this->kernel($projectDir)->tryUseRuntimeContainer($this->kernel($projectDir)->createContainer(), $registry));
+        }
+        clearstatcache();
+        self::assertGreaterThan(time() - 60, filemtime($meta[0]));
     }
 }

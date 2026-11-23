@@ -22,7 +22,10 @@ final readonly class ContainerCacheManager
     private const string SOURCES_PATTERN = '/^sources_[a-f0-9]{16}\.json$/D';
     private const string META_PATTERN = '/^meta_[a-f0-9]{16}\.json$/D';
     // Bounds metadata (and the generations it pins) left behind by retired bundle sets.
+    // Only metadata unused for the idle period is evicted: evicting a live set would make
+    // its next request recompile and evict the next one, so every request recompiles.
     private const int MAX_BUNDLE_SETS = 32;
+    private const int BUNDLE_SET_IDLE_SECONDS = 30 * 86400;
 
     public function __construct(
         private string $cacheDir,
@@ -62,11 +65,20 @@ final readonly class ContainerCacheManager
             if ($runtimeConfigFiles === [] && is_array($stored)) {
                 $runtimeConfigFiles = array_values(array_filter($stored, is_string(...)));
             }
-            return $this->useCachedRuntimeContainer(
+            $used = $this->useCachedRuntimeContainer(
                 $container,
                 $this->fingerprints->stringKeyMap($metadata),
                 $this->fingerprints->fingerprint($bundles, $runtimeConfigFiles),
             );
+            if (!$used) {
+                return false;
+            }
+            // Record use at most hourly so cleanup evicts idle bundle sets, not live ones.
+            // A read-only (prewarmed) cache is never evicted, so skip it silently.
+            if (filemtime($metaFile) < time() - 3600 && is_writable($metaFile)) {
+                touch($metaFile);
+            }
+            return true;
         } finally {
             flock($lock, LOCK_UN);
             fclose($lock);
@@ -270,7 +282,7 @@ final readonly class ContainerCacheManager
         }
         $referenced = [$active];
         foreach ($this->newestFirst('/meta_*.json', self::META_PATTERN) as $index => $meta) {
-            if ($meta !== $activeMeta && $index >= self::MAX_BUNDLE_SETS) {
+            if ($meta !== $activeMeta && $index >= self::MAX_BUNDLE_SETS && filemtime($meta) < time() - self::BUNDLE_SET_IDLE_SECONDS) {
                 unlink($meta);
                 continue;
             }
