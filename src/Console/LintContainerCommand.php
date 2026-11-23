@@ -24,15 +24,8 @@ final class LintContainerCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        if ($this->container->runtimeContainer() !== null) {
-            $output->writeln('<info>The container is valid.</info>');
-
-            return Command::SUCCESS;
-        }
-
         try {
-            $builder = $this->container->builder();
-            $builder->compile(true);
+            ConfiguredBuilder::of($this->container)->compile(true);
         } catch (\Throwable $throwable) {
             $output->writeln(sprintf('<error>%s</error>', $throwable->getMessage()));
 

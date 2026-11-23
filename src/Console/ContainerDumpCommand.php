@@ -35,7 +35,7 @@ final class ContainerDumpCommand extends Command
     {
         $format = $input->getOption('format');
         $format = is_string($format) ? strtolower($format) : 'yaml';
-        $builder = $this->container->builder();
+        $builder = ConfiguredBuilder::of($this->container);
 
         if ($format === 'yaml') {
             $output->write((new YamlDumper($builder))->dump());
