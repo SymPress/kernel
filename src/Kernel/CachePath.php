@@ -30,9 +30,9 @@ final class CachePath
         }
         // PHP dumps that other users could have replaced are never adopted by chmod;
         // start a fresh generation in the private fallback.
-        if (!is_link($path) && !self::isTrusted($path, $project)) {
+        if (!self::isTrusted($path, $project)) {
             if ($configured !== null) {
-                throw new \RuntimeException('APP_CACHE_DIR contains a kernel directory that other users can replace (another owner, or a group/world-writable directory or parent). Configure a durable private directory with trusted parents, create it as the PHP-FPM user with mode 0700, and run cache warmup as that same user.');
+                throw new \RuntimeException('APP_CACHE_DIR contains a kernel directory that other users can replace (a symlink, another owner, or a group/world-writable directory or parent). Configure a durable private directory with trusted parents, create it as the PHP-FPM user with mode 0700, and run cache warmup as that same user.');
             }
             return self::privateFallback($project, $environment);
         }

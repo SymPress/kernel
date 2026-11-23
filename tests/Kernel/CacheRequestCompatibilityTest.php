@@ -82,6 +82,25 @@ final class CacheRequestCompatibilityTest extends KernelTestCase
         $manager->createRuntimeContainer($container, new BundleRegistry(), $files);
     }
 
+    public function testSymlinkedImplicitKernelDirectoryUsesPrivateFallback(): void
+    {
+        $project = $this->tmpPath('symlinked-kernel-cache');
+        $target = $this->tmpPath('symlinked-kernel-target');
+        mkdir($project . '/var/cache/test', 0700, true);
+        mkdir($target, 0700);
+        symlink($target, $project . '/var/cache/test/kernel');
+        $cache = CachePath::resolve($project, 'test');
+        self::assertStringStartsWith($project . '/var/cache-private-', $cache);
+        $kernel = $this->kernel($project);
+        $container = $kernel->createContainer();
+        $kernel->createRuntimeContainer($container, new BundleRegistry(), $kernel->configureContainer($container->builder(), $container, new BundleRegistry()));
+        self::assertTrue($kernel->tryUseRuntimeContainer($kernel->createContainer(), new BundleRegistry()));
+        self::assertSame([], glob($target . '/*') ?: []);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('APP_CACHE_DIR');
+        CachePath::resolve($project, 'test', $project . '/var/cache');
+    }
+
     public function testSuccessiveRequestsUseMetadataWithoutHashesOrOpcacheInvalidation(): void
     {
         $project = $this->tmpPath('request-hashes');
