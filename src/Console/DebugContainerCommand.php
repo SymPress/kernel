@@ -12,6 +12,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Alias;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainerInterface;
 use Symfony\Component\DependencyInjection\Reference;
 
@@ -21,6 +22,8 @@ use Symfony\Component\DependencyInjection\Reference;
 )]
 final class DebugContainerCommand extends Command
 {
+    private ?ContainerBuilder $builder = null;
+
     public function __construct(
         private readonly Container $container,
     ) {
@@ -83,6 +86,11 @@ final class DebugContainerCommand extends Command
         return $this->serviceIds();
     }
 
+    private function builder(): ContainerBuilder
+    {
+        return $this->builder ??= ConfiguredBuilder::of($this->container);
+    }
+
     /** @return list<string> */
     private function serviceIds(): array
     {
@@ -98,7 +106,7 @@ final class DebugContainerCommand extends Command
             return $ids;
         }
 
-        $ids = $this->container->builder()->getServiceIds();
+        $ids = $this->builder()->getServiceIds();
         sort($ids);
 
         return $ids;
@@ -107,7 +115,7 @@ final class DebugContainerCommand extends Command
     /** @return list<string> */
     private function taggedServices(string $tag, bool $types, bool $showArguments): array
     {
-        $builder = $this->container->builder();
+        $builder = $this->builder();
         $ids = array_keys($builder->findTaggedServiceIds($tag));
         sort($ids);
 
@@ -149,7 +157,7 @@ final class DebugContainerCommand extends Command
 
     private function describeService(string $id, bool $showArguments): string
     {
-        $builder = $this->container->builder();
+        $builder = $this->builder();
 
         if ($builder->hasAlias($id)) {
             return $this->describeAlias($id, $builder->getAlias($id));
@@ -191,7 +199,7 @@ final class DebugContainerCommand extends Command
     /** @return list<string> */
     private function parameters(): array
     {
-        $builder = $this->container->builder();
+        $builder = $this->builder();
 
         $parameters = array_keys($builder->getParameterBag()->all());
         sort($parameters);
@@ -202,7 +210,7 @@ final class DebugContainerCommand extends Command
     /** @return list<string> */
     private function envVars(): array
     {
-        $builder = $this->container->builder();
+        $builder = $this->builder();
         $envs = [];
 
         foreach ($builder->getParameterBag()->all() as $value) {
