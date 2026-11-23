@@ -106,6 +106,27 @@ namespace {
         }
     }
 
+    if (!function_exists('is_multisite')) {
+        function is_multisite(): bool
+        {
+            return (bool) ($GLOBALS['kernel_test_is_multisite'] ?? false);
+        }
+    }
+
+    if (!function_exists('is_network_admin')) {
+        function is_network_admin(): bool
+        {
+            return (bool) ($GLOBALS['kernel_test_is_network_admin'] ?? false);
+        }
+    }
+
+    if (!function_exists('is_network_only_plugin')) {
+        function is_network_only_plugin(string $plugin): bool
+        {
+            return in_array($plugin, $GLOBALS['kernel_test_network_only_plugins'] ?? [], true);
+        }
+    }
+
     if (!function_exists('delete_plugins')) {
         function delete_plugins(array $plugins): bool
         {
@@ -186,6 +207,7 @@ namespace SymPress\Kernel\Tests\Admin {
             $GLOBALS['kernel_test_admin_menu_pages'] = [];
             $GLOBALS['kernel_test_admin_actions'] = [];
             $GLOBALS['kernel_test_capabilities'] = [
+                'activate_plugin'  => true,
                 'activate_plugins' => true,
                 'delete_plugins'   => true,
             ];
@@ -202,6 +224,9 @@ namespace SymPress\Kernel\Tests\Admin {
                 $GLOBALS['kernel_test_admin_menu_pages'],
                 $GLOBALS['kernel_test_capabilities'],
                 $GLOBALS['kernel_test_file_mod_allowed'],
+                $GLOBALS['kernel_test_is_multisite'],
+                $GLOBALS['kernel_test_is_network_admin'],
+                $GLOBALS['kernel_test_network_only_plugins'],
                 $GLOBALS['kernel_test_plugins_cache_cleaned'],
             );
 
@@ -256,6 +281,22 @@ namespace SymPress\Kernel\Tests\Admin {
             self::assertFalse(
                 $this->invokePageMethod('canRun', 'activate', $this->pluginPackage('/tmp/demo')),
             );
+        }
+
+        public function testSiteAdminCannotActivateNetworkOnlyPlugin(): void
+        {
+            $package = $this->pluginPackage('/tmp/demo');
+            self::assertTrue($this->invokePageMethod('canRun', 'activate', $package));
+
+            $GLOBALS['kernel_test_is_multisite'] = true;
+            $GLOBALS['kernel_test_network_only_plugins'] = ['demo/demo.php'];
+            self::assertFalse($this->invokePageMethod('canRun', 'activate', $package));
+
+            $GLOBALS['kernel_test_is_network_admin'] = true;
+            self::assertTrue($this->invokePageMethod('canRun', 'activate', $package));
+
+            $GLOBALS['kernel_test_capabilities']['activate_plugin'] = false;
+            self::assertFalse($this->invokePageMethod('canRun', 'activate', $package));
         }
 
         public function testUnmanagedSymlinkDeleteIsRejected(): void

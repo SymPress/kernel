@@ -49,7 +49,24 @@ final class PackageManagerActions
 
         return $action === 'activate'
             && $package->isPlugin()
-            && current_user_can('activate_plugins');
+            && current_user_can('activate_plugins')
+            && current_user_can('activate_plugin', $package->entry())
+            && !$this->networkOnlyOnSite($package);
+    }
+
+    /**
+     * activate_plugin() activates a "Network: true" plugin network-wide without a
+     * capability check; core's plugins.php only allows that from the network admin.
+     */
+    private function networkOnlyOnSite(PackageMetadata $package): bool
+    {
+        if (!is_multisite() || is_network_admin()) {
+            return false;
+        }
+
+        $this->loadPluginAdminFunctions();
+
+        return is_network_only_plugin($package->entry());
     }
 
     public function isKnownAction(string $action): bool
