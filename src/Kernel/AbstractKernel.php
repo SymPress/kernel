@@ -270,6 +270,7 @@ abstract class AbstractKernel implements KernelInterface
             $this->projectDir,
             $this->environment,
             $this->getCacheDir(),
+            $this->configuration()->bundlesConfiguration(),
         ))->discover();
         $this->bundles = $this->bundleMap($this->bundleRegistry);
 

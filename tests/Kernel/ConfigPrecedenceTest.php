@@ -11,6 +11,7 @@ use SymPress\Kernel\Bundle\BundleRegistry;
 use SymPress\Kernel\Kernel\AbstractKernel;
 use SymPress\Kernel\Location\Locations;
 use SymPress\Kernel\SiteConfig;
+use SymPress\Kernel\Tests\Support\TestSiteConfig;
 use SymPress\Kernel\WpContext;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -30,6 +31,24 @@ final class ConfigPrecedenceTest extends TestCase
 
         self::assertSame($projectDir . '/var/cache/test/kernel', $container->builder()->getParameter('kernel.cache_dir'));
         self::assertSame($projectDir . '/var/log', $container->builder()->getParameter('kernel.logs_dir'));
+    }
+
+    public function testColdBootRequiresBundlesConfigurationOnce(): void
+    {
+        $projectDir = $this->tmpPath('project');
+        mkdir("{$projectDir}/config", 0777, true);
+        // A bundles.php that declares a function would fatal on a second require.
+        file_put_contents("{$projectDir}/config/bundles.php", "<?php\n\n\$GLOBALS['kernel_test_bundles_loads'] = (\$GLOBALS['kernel_test_bundles_loads'] ?? 0) + 1;\n\nreturn [];\n");
+        $kernel = new class ($projectDir, 'test', false, new TestSiteConfig('test'), WpContext::new()->force(WpContext::CORE)) extends AbstractKernel {
+        };
+        $container = $kernel->createContainer();
+
+        try {
+            $kernel->configureContainer($container->builder(), $container, $kernel->discoverBundles());
+            self::assertSame(1, $GLOBALS['kernel_test_bundles_loads']);
+        } finally {
+            unset($GLOBALS['kernel_test_bundles_loads']);
+        }
     }
 
     protected function tearDown(): void
