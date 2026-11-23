@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where applicable.
 
+## 1.1.18 — 2026-11-23
+
+- Stop recompiling on every request when more than 32 bundle sets are live (multisite). Warm hits refresh the bundle-set metadata mtime at most hourly (not for a read-only prewarmed cache), and metadata beyond the 32-set cap is evicted only after 30 days without use. Before, the oldest set by creation time was evicted, so each recompile evicted another live set.
+- Treat a symlinked implicit `var/cache/<env>/kernel` directory as untrusted and use the private fallback. Before, `resolve()` returned the symlink and every request failed with HTTP 500 after a full compile. An explicit `APP_CACHE_DIR` whose `kernel` entry is a symlink now fails in `CachePath::resolve()` with the existing diagnostic.
+- Require `config/bundles.php` once per boot. A cold boot used to require it twice, so a file that declares a function or class failed with "Cannot redeclare". `BundleDiscovery` accepts the loaded configuration as an optional trailing constructor argument.
+- On multisite, refuse to activate a "Network: true" plugin package from a site admin's package page, as core's `plugins.php` does. Activation also requires the `activate_plugin` meta capability for the entry.
+- After a warm cache hit, `container:dump` and `debug:container --parameters/--tag/--types/--env-vars` show a freshly configured builder instead of the bootstrap stub. `lint:container` now always compiles the configured container instead of reporting "valid" whenever a runtime container exists.
+- Let Dependabot update the pinned GitHub Actions (CI only).
+
 ## 1.1.17 — 2026-11-16
 
 - Stop failing the boot when another local user pre-creates the predictable temporary cache root (`<tmp>/sympress-kernel-<uid>-<hash>`) as a directory or symlink. The kernel still never adopts such a path; it reuses or atomically creates a randomly suffixed private sibling (mode 0700, owned by the PHP user) and logs the switch.
